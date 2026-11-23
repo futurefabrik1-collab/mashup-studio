@@ -43,7 +43,7 @@ code{word-break:break-all}
       <h2>4 · Start</h2>
       <div class="row"><button id="open" disabled>Open the Studio</button><span id="open-msg" class="mut"></span></div>
     </div>
-    <p class="mut small">Settings file: <code id="file"></code></p>
+    <p class="mut small">Settings file: <code id="file"></code><br>Runs, briefs and cache: <code id="data"></code></p>
   </div>
 </main>
 <div id="restarting" hidden>Starting Mashup Studio…</div>
@@ -74,7 +74,7 @@ async function load(fill) {
   S = await api("/api/setup");
   if (fill) { $("music").value = S.music_folders.join("\n"); $("export").value = S.export_folder; }
   saved = S.saved;
-  $("file").textContent = S.file;
+  $("file").textContent = S.file; $("data").textContent = S.data;
   if (S.missing.length) showErr(`Not installed: ${S.missing.join(", ")}. With Homebrew: brew install ffmpeg rubberband`);
   refresh();
 }

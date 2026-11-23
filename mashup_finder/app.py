@@ -257,7 +257,7 @@ class App:
     folder deleted runs and mashups are moved into (tests). claude_check: draft.status, or a stand-in (tests).
     load_catalog: the music catalog for the live count (read once per start), or a fixture (tests)."""
 
-    def __init__(self, root=cli.ROOT, ssd=None, mf=MF, drafter=draft.draft, trash=None, claude_check=draft.status,
+    def __init__(self, root=config.DATA, ssd=None, mf=MF, drafter=draft.draft, trash=None, claude_check=draft.status,
                  load_catalog=catalog.Catalog, picker=None, folder_picker=None):
         ssd = ssd or config.load()["export_folder"]              # the export folder: the settings', unless given
         self.ssd, self.mf, self.drafter, self.trash, self.claude_check = ssd, list(mf), drafter, trash, claude_check
@@ -518,11 +518,11 @@ class App:
 
     def setup(self):
         """What the setup page shows: the settings file and its folders (or a suggestion), whether the catalog is
-        there yet, and which of the programs the Studio runs are missing."""
+        there yet, the data folder (runs, briefs, cache), and which of the programs the Studio runs are missing."""
         s = config.load()
         music = s["music_folders"] or [f for f in [os.path.expanduser("~/Music")] if os.path.isdir(f)]
         return {"file": config.path(), "saved": config.exists(), "music_folders": music, "export_folder": s["export_folder"],
-                "catalog": s["catalog"], "catalog_ok": os.path.isfile(s["catalog"]),
+                "catalog": s["catalog"], "catalog_ok": os.path.isfile(s["catalog"]), "data": config.DATA,
                 "missing": [p for p in ("ffmpeg", "ffprobe", "rubberband") if not shutil.which(p)]}
 
     def pick_folder(self, what):

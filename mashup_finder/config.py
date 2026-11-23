@@ -5,15 +5,30 @@ they are imported (Restart in the page reads it again).
   music_folders     folders `mf scan` reads (a list)
   catalog           the catalog CSV that find, check and the Studio read (`mf scan` writes it; default: beside this file)
   export_folder     where Export and "Copy to export folder" file pair folders
-  cache_folder      separated stems and beats (default: _cache in the program folder)
+  cache_folder      separated stems and beats (default: _cache in the data folder)
   extra_sources     optional analysis files in super_massive.json's format (vocal presence, key confidence)
   playlists_folder  optional: where the brief drafter looks for playlists to suggest
 """
-import json, os, tomllib
+import glob, json, os, shutil, tomllib
 
 SUPPORT = os.path.expanduser("~/Library/Application Support/Mashup Studio")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))          # the program folder (a clone of the repo)
+# The data folder: runs/, briefs/ and the default cache. $MF_DATA when set (the Mac app sets it to SUPPORT, since nothing
+# may be written inside the signed app), else the program folder itself, as a clone install has always had it.
+DATA = os.path.expanduser(os.environ.get("MF_DATA") or ROOT)
 LISTS = ("music_folders", "extra_sources")
+
+
+def seed_data():
+    """A data folder of its own (the Mac app's) gets runs/ and, the first time, the program's example briefs."""
+    if os.path.realpath(DATA) == os.path.realpath(ROOT):
+        return
+    os.makedirs(os.path.join(DATA, "runs"), exist_ok=True)
+    briefs = os.path.join(DATA, "briefs")
+    if not os.path.isdir(briefs):
+        os.makedirs(briefs)
+        for f in glob.glob(os.path.join(ROOT, "briefs", "*.toml")):
+            shutil.copy(f, briefs)
 
 
 def path():
@@ -26,7 +41,7 @@ def exists():
 
 def defaults():
     return {"music_folders": [], "catalog": os.path.join(os.path.dirname(path()), "catalog.csv"),
-            "export_folder": os.path.expanduser("~/Music/Mashup Studio"), "cache_folder": os.path.join(ROOT, "_cache"),
+            "export_folder": os.path.expanduser("~/Music/Mashup Studio"), "cache_folder": os.path.join(DATA, "_cache"),
             "extra_sources": [], "playlists_folder": ""}
 
 

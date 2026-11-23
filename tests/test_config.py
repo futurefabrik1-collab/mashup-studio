@@ -63,6 +63,25 @@ class ConfigTest(unittest.TestCase):
             cli.main(["export", "/no/run"])
         self.assertEqual(export.call_args[0][2], "/Volumes/Out/Mixes")
 
+    def test_the_data_folder_holds_runs_briefs_and_the_cache(self):
+        probe = ("import json, os; from mashup_finder import app, cli, config, deep, engine; config.seed_data(); "
+                 "a = app.App(); print(json.dumps([config.DATA, cli.RUNS, engine.RUNS, deep.CACHE, a.runs, a.briefs, "
+                 "sorted(os.listdir(a.briefs)) if os.path.isdir(a.briefs) else None]))")
+        env = {k: v for k, v in os.environ.items() if k != "MF_DATA"}
+        data = os.path.join(fx.tmpdir("mf-data-"), "Mashup Studio")          # the Mac app's: a folder of its own
+        got = json.loads(subprocess.run([sys.executable, "-c", probe], cwd=ROOT, env={**env, "MF_DATA": data},
+                                        capture_output=True, text=True, check=True).stdout)
+        examples = sorted(os.path.basename(f) for f in os.listdir(os.path.join(ROOT, "briefs")) if f.endswith(".toml"))
+        self.assertEqual(got, [data, f"{data}/runs", f"{data}/runs", f"{data}/_cache", f"{data}/runs", f"{data}/briefs", examples])
+        with open(os.path.join(data, "briefs", examples[0]), "w") as f:
+            f.write("# edited\n")
+        subprocess.run([sys.executable, "-c", probe], cwd=ROOT, env={**env, "MF_DATA": data}, check=True, capture_output=True)
+        with open(os.path.join(data, "briefs", examples[0])) as f:
+            self.assertEqual(f.read(), "# edited\n")                         # seeded once, never written over
+        got = json.loads(subprocess.run([sys.executable, "-c", probe], cwd=ROOT, env=env,      # a clone: as before
+                                        capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(got[:6], [ROOT, f"{ROOT}/runs", f"{ROOT}/runs", f"{ROOT}/_cache", f"{ROOT}/runs", f"{ROOT}/briefs"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,15 +5,44 @@ instrumental of another. You audition the pairs, keep the good ones, and Mashup 
 that you can edit block by block and export. It runs on your Mac as a local web page. Your music stays on your
 computer.
 
-## Requirements
+## Download
+
+You need a Mac with Apple Silicon and macOS 14 or later. You don't need Homebrew, Terminal or git.
+
+1. Download **Mashup Studio-&lt;version&gt;.dmg** (about 75 MB) from the
+   [latest release](https://github.com/futurefabrik1-collab/mashup-studio/releases/latest).
+2. Open it and drag **Mashup Studio** onto **Applications**.
+3. Open **Mashup Studio**.
+   - The first open downloads Python 3.12 and the audio and AI packages, about 250 MB, which take about 1 GB on
+     disk. A window shows each step, how far it has got and how long it has taken.
+   - How long this takes depends on your connection: at 1 MB/s it is about 4 minutes.
+   - If the download fails, the window says why and offers **Try again**.
+   - Later opens start the Studio in a second or two.
+
+ffmpeg and Rubber Band come inside the app.
+
+The separation model (about 80 MB) downloads the first time you check a pair.
+
+Your settings, catalog, runs, briefs and stem cache live in `~/Library/Application Support/Mashup Studio`. The
+settings page shows this folder. The stem cache takes about 90 MB per track and is capped at 8 GB.
+
+To uninstall:
+
+1. Select **Quit** in the page.
+2. Move **Mashup Studio** from Applications to the Trash.
+3. Delete the folder `~/Library/Application Support/Mashup Studio`.
+
+Your music and your export folder are left as they are.
+
+## Install from source
+
+You need:
 
 - A Mac with Apple Silicon and macOS 14 or later.
 - [Homebrew](https://brew.sh), for ffmpeg and Rubber Band.
 - git.
 - Disk space for the Python packages (PyTorch is the largest), the separation model (about 80 MB, downloaded on
   first use) and the stem cache (about 90 MB per track, capped at 8 GB).
-
-## Install
 
 ```bash
 git clone https://github.com/futurefabrik1-collab/mashup-studio.git
@@ -31,10 +60,16 @@ The installer does three things:
 Keep the cloned folder: the app runs from it, and your briefs and runs are stored in it. To update, run `git pull`
 and then `packaging/install.sh` again.
 
+To build the downloadable app and DMG yourself, run `packaging/build-app.sh`. It needs Xcode's command-line tools,
+and writes to `dist/`. It downloads uv, ffmpeg and Rubber Band, and checks each against the sha256 in
+`packaging/third-party.txt`. `--sign` and `--notarize` need your own Developer ID, given in `SIGN_IDENTITY` and
+`NOTARY_PROFILE`. The app installs the Python packages listed in `packaging/requirements.lock`, each pinned with its
+hashes. After you change a version in `pyproject.toml`, run `packaging/build-app.sh --lock` to write that file again.
+
 ## First start
 
-Open **Mashup Studio** from `~/Applications`. A Terminal window starts the Studio, and the browser opens its
-settings page:
+Open **Mashup Studio**. The downloaded app starts the Studio on its own. With a source install, a Terminal window
+starts it. Either way, the browser then opens the settings page:
 
 1. **Music folders**: the folders with your music (mp3, m4a, aiff, wav or flac). Mashup Studio only reads them.
 2. **Export folder**: where exported pairs and finished mashups go. An external drive is fine. Choose a new or

@@ -14,7 +14,7 @@ import numpy as np
 from . import config
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUNS = os.path.join(ROOT, "runs")
+RUNS = os.path.join(config.DATA, "runs")
 
 
 def ratings(runs=None):
@@ -352,6 +352,7 @@ def main(argv=None):
              skip=[settings["export_folder"], settings["cache_folder"]])     # the Studio's own output
     elif a.cmd == "app":
         from .app import serve
+        config.seed_data()
         serve(a.port, not a.no_browser)
     elif a.cmd == "edit":
         from .edit import serve
