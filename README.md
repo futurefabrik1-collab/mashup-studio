@@ -16,7 +16,7 @@ computer.
 ## Install
 
 ```bash
-git clone <repository URL> mashup-studio
+git clone https://github.com/futurefabrik1-collab/mashup-studio.git
 cd mashup-studio
 packaging/install.sh
 ```
