@@ -1,0 +1,55 @@
+# DJ tool: full club length (224 bars: about 5:05 at 175 BPM, 6:30 at 138), with 32 bars of drums and
+# bass in and out for mixing in a set. Keys as in club.toml.
+name = "dj-tool"
+
+[[section]]
+name = "intro"
+bars = 32
+inst = "drop"
+inst_stems = ["drums", "bass"]
+
+[[section]]
+name = "intro 2"
+bars = 16
+inst = "drop"
+vocal = "adlib"
+vocal_bars = 4
+
+[[section]]
+name = "build"
+bars = 16
+inst = "build"
+vocal = "hook"
+vocal_bars = 8
+fx = ["drop_cut"]
+
+[[section]]
+name = "drop"
+bars = 32
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "break"
+bars = 32
+inst = "break"
+inst_stems = ["other"]
+vocal = "verse"
+fx = ["drop_cut"]
+
+[[section]]
+name = "drop 2"
+bars = 32
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "outro"
+bars = 32
+inst = "drop"
+
+[[section]]
+name = "outro 2"
+bars = 32
+inst = "drop"
+inst_stems = ["drums", "bass"]

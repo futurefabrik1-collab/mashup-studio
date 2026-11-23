@@ -1,0 +1,5 @@
+_cache/
+runs/
+__pycache__/
+briefs/*.bak
+.DS_Store

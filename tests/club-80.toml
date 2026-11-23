@@ -1,0 +1,47 @@
+# The club layout before 2026-11-11 (80 bars), pinned for the render tests: their bar positions (the build at 16,
+# the break at 40, the verse at 40, the outro at 72) are this layout's, whatever templates/club.toml becomes.
+# Each [[section]]: bars (multiple of 4); inst = B section type to draw from (intro, build, drop, break,
+# outro, any); inst_stems = B stems that play; vocal = hook, verse, adlib or none; vocal_bars = how many
+# of the section's last bars carry the vocal (default: all); fx from lowpass_sweep_up, highpass_sweep_down,
+# drop_cut, filter_open, fade_in, fade_out.
+name = "club-80"
+
+[[section]]
+name = "intro"
+bars = 16
+inst = "intro"
+fx = ["filter_open"]
+
+[[section]]
+name = "build"
+bars = 8
+inst = "build"
+vocal = "hook"
+vocal_bars = 4
+fx = ["lowpass_sweep_up", "drop_cut"]
+
+[[section]]
+name = "drop"
+bars = 16
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "break"
+bars = 16
+inst = "break"
+inst_stems = ["other"]
+vocal = "verse"
+fx = ["drop_cut"]
+
+[[section]]
+name = "drop 2"
+bars = 16
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "outro"
+bars = 8
+inst = "outro"
+fx = ["fade_out"]

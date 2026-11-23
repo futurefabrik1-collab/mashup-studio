@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mashup editor</title>
+<style>
+:root{--bg:#fff3b8;--fg:#24113a;--mut:#6a5580;--card:#fffdf6;--line:#24113a;--soft:#ecdcae;--ok:#12a150;--no:#e3172d;--err:#e3172d;--acc:#ff2e7e;
+--straw:#ff2e7e;--orange:#ff8a00;--lemon:#ffd21f;--kiwi:#3ed35f;--grape:#7b2cff;--berry:#00c2d1;
+--vocal:#ff2e7e;--drums:#ff8a00;--bass:#7b2cff;--other:#3ed35f;--sel:#24113a;
+--round:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Nunito",-apple-system,system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 -apple-system,system-ui,sans-serif;overflow-x:hidden}
+header{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:5}
+header h1{font-size:15px;margin:0 8px 0 0;font-weight:650;max-width:40ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button,select{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:7px;padding:4px 10px;cursor:pointer}
+button.on{border-color:var(--acc);color:var(--acc)}button:disabled{opacity:.45;cursor:default}
+.grp{display:flex;gap:4px;align-items:center}
+#status{margin-left:auto;font-size:13px;color:var(--mut);max-width:48ch}#status.err{color:var(--err)}#status.ok{color:var(--ok)}
+main{padding:12px 16px 24px}
+#wrap{display:grid;grid-template-columns:92px minmax(0,1fr);border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}
+#heads{border-right:1px solid var(--line)}
+.hrow{height:22px;border-bottom:1px solid var(--line);font-size:11px;color:var(--mut);padding:3px 8px}
+.lhead{height:58px;border-bottom:1px solid var(--line);padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+.lhead b{font-size:13px;text-transform:capitalize}.lhead .ms{display:flex;gap:3px}.lhead .ms button{padding:0 6px;font-size:11px}
+#scroll{overflow-x:auto;overflow-y:hidden;position:relative}
+#tl{position:relative}
+.row{position:relative;border-bottom:1px solid var(--line)}
+#secs,#ruler{height:22px}
+.sec{position:absolute;top:0;height:21px;border-left:1px solid var(--line);font-size:11px;padding:3px 5px;white-space:nowrap;overflow:hidden;color:var(--mut)}
+.tick{position:absolute;top:0;height:21px;border-left:1px solid var(--line);font-size:10px;padding:4px 3px;color:var(--mut);font-variant-numeric:tabular-nums}
+#ruler{cursor:crosshair}
+.lane{height:58px;background-image:linear-gradient(to right,var(--line) 1px,transparent 1px)}
+.blk{position:absolute;top:5px;height:47px;border-radius:6px;color:#fff;font-size:11px;padding:4px 7px;overflow:hidden;white-space:nowrap;cursor:grab;touch-action:none;user-select:none;opacity:.88;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.blk.sel{outline:2px solid var(--sel);outline-offset:1px;opacity:1}
+.blk .h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}.blk .h.l{left:0}.blk .h.r{right:0}
+.blk small{display:block;opacity:.85}
+.blk .fh{position:absolute;top:2px;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid var(--line);cursor:col-resize;z-index:2;opacity:.85}
+.blk .fh.in{left:9px}.blk .fh.out{right:9px}.blk:not(:hover):not(.sel) .fh{opacity:0}
+.blk .fo{position:absolute;top:0;bottom:0;right:0;pointer-events:none;background:linear-gradient(to top right,transparent 49%,rgba(255,255,255,.6) 51%)}
+.fi{position:absolute;top:5px;height:47px;pointer-events:none;border-radius:6px 0 0 6px;background:linear-gradient(to top left,transparent 49%,rgba(36,17,58,.28) 51%)}
+.lane.vocal .blk{background:var(--vocal)}.lane.drums .blk{background:var(--drums)}.lane.bass .blk{background:var(--bass)}.lane.other .blk{background:var(--other)}
+#loop{position:absolute;top:0;bottom:0;background:rgba(61,90,254,.12);border-left:2px solid var(--acc);border-right:2px solid var(--acc);pointer-events:none;display:none}
+#head{position:absolute;top:0;bottom:0;width:2px;background:var(--err);pointer-events:none;display:none}
+#insp{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;min-height:34px;color:var(--mut)}
+#insp b{color:var(--fg)}#gain{width:180px;vertical-align:middle}
+footer{margin-top:10px;font-size:12px;color:var(--mut)}kbd{border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
+
+/* ---- juicy fruits ---- */
+html{color-scheme:light}
+body{font-family:var(--round);font-weight:500;background-color:var(--bg);
+background-image:radial-gradient(circle at 12px 12px,rgba(255,138,0,.22) 2.5px,transparent 3px);background-size:28px 28px;background-attachment:fixed}
+header{background:var(--lemon);border-bottom:3px solid var(--line);box-shadow:0 4px 0 rgba(36,17,58,.12)}
+button,select,input{font-family:var(--round)}
+button{border:2.5px solid var(--line);border-radius:999px;background:var(--card);color:var(--fg);font-weight:700;padding:5px 14px;
+box-shadow:3px 3px 0 var(--line);transition:transform .08s,box-shadow .08s,background .12s}
+button:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--line);background:#fff}
+button:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line)}
+button:disabled{opacity:.4;box-shadow:none}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--grape);outline-offset:2px}
+button.on{background:var(--straw);color:#fff;border-color:var(--line);box-shadow:3px 3px 0 var(--line)}
+select,input{border:2.5px solid var(--line);border-radius:12px;background:var(--card);font-weight:600}
+input[type=range]{border:0;accent-color:var(--straw);background:transparent}
+kbd{border:2px solid var(--line);border-radius:6px;background:var(--card);font-weight:700}
+::selection{background:var(--lemon)}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+
+header h1{font-size:18px;font-weight:900;letter-spacing:-.01em}
+#play{background:var(--kiwi)}#render{background:var(--straw);color:#fff}#save{background:var(--lemon)}#mixbtn{background:var(--berry)}
+button.on{background:var(--grape);color:#fff}
+#status{font-weight:600}
+#wrap{border:3px solid var(--line);border-radius:18px;box-shadow:6px 6px 0 var(--grape)}
+#heads{border-right:3px solid var(--line);background:#fff7d6}
+.hrow,.lhead,.row{border-bottom:2px solid var(--soft)}
+.hrow{font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10px}
+.lhead b{font-weight:900;font-size:14px}
+.lhead.vocal{background:var(--vocal);color:#fff}.lhead.drums{background:var(--drums)}.lhead.bass{background:var(--bass);color:#fff}.lhead.other{background:var(--other)}
+.lhead .ms button{box-shadow:2px 2px 0 var(--line);border-width:2px;padding:0 7px}
+.sec{border-left:2px solid var(--line);color:var(--fg);font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:rgba(255,210,31,.45)}
+.sec:nth-child(4n+2){background:rgba(255,46,126,.22)}.sec:nth-child(4n+3){background:rgba(62,211,95,.3)}.sec:nth-child(4n+4){background:rgba(0,194,209,.25)}
+.tick{border-left:1px solid var(--soft);font-weight:700}
+.lane{background-image:linear-gradient(to right,var(--soft) 1px,transparent 1px)}
+.blk{border:2.5px solid var(--line);border-radius:12px;opacity:1;font-weight:800;font-size:11px;box-shadow:2px 3px 0 var(--line);padding:3px 8px}
+.blk:hover{filter:brightness(1.06) saturate(1.1)}
+.blk.sel{outline:3px solid var(--lemon);outline-offset:0;box-shadow:4px 5px 0 var(--line);transform:translateY(-1px)}
+.lane.vocal .blk,.lane.bass .blk{color:#fff}.lane.drums .blk,.lane.other .blk{color:var(--fg)}
+#loop{background:rgba(255,210,31,.35);border-left:3px solid var(--line);border-right:3px solid var(--line)}
+#head{width:3px;background:var(--fg)}
+#insp{background:var(--card);border:3px solid var(--line);border-radius:16px;padding:8px 14px;box-shadow:4px 4px 0 var(--orange);color:var(--fg)}
+footer{color:var(--mut);font-weight:500}
+.blk canvas.wf{position:absolute;left:0;top:0;pointer-events:none}
+.blk .lbl{position:relative}
+body.cutting .blk,body.cutting .blk .h{cursor:crosshair}
+#split.on{background:var(--orange);color:var(--fg)}
+#cutline{position:absolute;width:3px;margin-left:-1px;background:var(--fg);pointer-events:none;display:none;z-index:3;border-radius:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Mashup editor</h1>
+  <div class="grp"><button id="play" disabled>Play</button><button id="loopbtn" title="Loop the selected bars (drag on the ruler)">Loop</button><button id="mixbtn" disabled>Play rendered mix</button></div>
+  <div class="grp"><button id="split" title="Split tool (S): click a block to cut it at the snapped bar or beat">✂ Split</button><button id="snap" title="Snap to bars or beats">Snap: bar</button><button id="zout" title="Zoom out">−</button><button id="zin" title="Zoom in">+</button></div>
+  <div class="grp"><button id="undo" disabled>Undo</button><button id="redo" disabled>Redo</button><button id="save" disabled>Save</button><button id="render">Render</button></div>
+  <span id="status">Loading…</span>
+</header>
+<main>
+  <div id="wrap">
+    <div id="heads"><div class="hrow">Sections</div><div class="hrow">Bar</div></div>
+    <div id="scroll"><div id="tl"><div class="row" id="secs"></div><div class="row" id="ruler"></div><div id="lanes"></div><div id="loop"></div><div id="head"></div><div id="cutline"></div></div></div>
+  </div>
+  <div id="insp">Click a block to select it.</div>
+  <footer>Drag a block to move it, <kbd>Alt</kbd>-drag to copy, <kbd>S</kbd> or ✂ Split then click a block to cut it (<kbd>Esc</kbd> leaves the tool), drag an edge to trim, drag a selected block's top corner dots to fade it in or out, <kbd>Delete</kbd> to remove,
+    <kbd>⌘Z</kbd>/<kbd>⇧⌘Z</kbd> undo/redo, <kbd>Space</kbd> play/stop. Drag on the bar ruler to select bars to loop.
+    The preview plays the blocks with their gains; fx, pickups, the vocal duck and mastering are heard in the rendered mix.
+    <audio id="mix" preload="none"></audio></footer>
+</main>
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+let LANES = [], SR = 0, SOURCE_OF = {};                           // from the server, which owns them
+const $ = (id) => document.getElementById(id);
+const api = (path, body) => fetch(path, body === undefined ? {headers: {"X-Token": TOKEN}}
+  : {method: "POST", headers: {"X-Token": TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(body)})
+  .then(async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok || j.ok === false) throw new Error(j.error || r.statusText); return j; });
+
+let arr = null, ppb = 28, snap = 1, sel = null, dirty = false, edits = 0, undoStack = [], redoStack = [];
+let ctx = null, buffers = {}, peaks = {}, cutting = false, loadingAudio = null, play = null, laneGain = {}, mute = {}, solo = {}, loopSel = null, loopOn = false;
+const k = (b) => (b.src === "A" ? arr.tempo_mult : 1);            // output bars per source bar
+const srcName = (b) => SOURCE_OF[b.lane][b.src];
+const barSec = () => 240 / arr.output_bpm;
+const q = (x) => Math.round(x * 1e4) / 1e4;
+const nBars = () => Math.max(arr.bars, ...LANES.flatMap((l) => arr.lanes[l].map((b) => b.out_bar + b.bars)));
+const say = (msg, cls = "") => { const s = $("status"); s.textContent = msg; s.className = cls; };
+
+// ---------- drawing ----------
+function draw() {
+  const W = Math.ceil(nBars() + 8) * ppb;
+  $("tl").style.width = W + "px";
+  $("secs").innerHTML = arr.sections.map((s) => `<div class="sec" style="left:${s.out_bar * ppb}px;width:${s.bars * ppb}px" title="${esc(s.name)}: bars ${s.out_bar + 1}–${s.out_bar + s.bars}">${esc(s.name)}</div>`).join("");
+  const step = ppb >= 24 ? 4 : ppb >= 12 ? 8 : 16;
+  let r = "";
+  for (let b = 0; b < W / ppb; b += step) r += `<div class="tick" style="left:${b * ppb}px">${b + 1}</div>`;
+  $("ruler").innerHTML = r;
+  $("lanes").innerHTML = LANES.map((l) => `<div class="row lane ${l}" data-lane="${l}" style="background-size:${ppb * 4}px 100%"></div>`).join("");
+  for (const l of LANES) {
+    const row = document.querySelector(`.lane.${l}`);
+    arr.lanes[l].forEach((b) => {
+      row.appendChild(blockEl(b));
+      if (b.fade_in) row.insertAdjacentHTML("beforeend", `<div class="fi" style="left:${(b.out_bar - b.fade_in) * ppb}px;width:${b.fade_in * ppb}px"></div>`);
+    });
+  }
+  $("heads").querySelectorAll(".lhead").forEach((e) => e.remove());
+  for (const l of LANES) {
+    const h = document.createElement("div");
+    h.className = "lhead " + l;
+    h.innerHTML = `<b>${l}</b><span class="ms"><button data-m="${l}" class="${mute[l] ? "on" : ""}" title="Mute">M</button><button data-s="${l}" class="${solo[l] ? "on" : ""}" title="Solo">S</button></span>`;
+    $("heads").appendChild(h);
+  }
+  drawLoop(); showStart();
+  inspect();
+  $("undo").disabled = !undoStack.length; $("redo").disabled = !redoStack.length; $("save").disabled = !dirty;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
+function blockEl(b) {
+  const e = document.createElement("div");
+  e.className = "blk" + (b === sel ? " sel" : "");
+  e.style.left = b.out_bar * ppb + "px";
+  e.style.width = Math.max(4, b.bars * ppb - 2) + "px";
+  const span = b.bars / k(b);
+  e.innerHTML = `<div class="h l"></div><div class="h r"></div><div class="fh in" title="Fade in: drag left to swell in before the block"></div>` +
+    `<div class="fh out" title="Fade out: drag left to fade over the block's last bars"></div><div class="fo" style="width:${(b.fade_out || 0) * ppb}px"></div>` +
+    `<span class="lbl">${b.src} ${fmt(b.src_bar + 1)}–${fmt(b.src_bar + span)}` +
+    `<small>${fmt(b.bars)} bar${b.bars === 1 ? "" : "s"}${b.gain_db ? " · " + (b.gain_db > 0 ? "+" : "") + b.gain_db.toFixed(1) + " dB" : ""}</small></span>`;
+  waveform(e, b);
+  e.title = `${b.lane}: output bars ${fmt(b.out_bar + 1)}–${fmt(b.out_bar + b.bars)}, from ${b.src} bar ${fmt(b.src_bar + 1)}`;
+  e.block = b;
+  return e;
+}
+const fmt = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(2).replace(/0+$/, ""));
+
+// ---------- waveforms: PER_BAR peaks per source, scaled to the source's loudest, drawn under the block's label ----------
+const PER_BAR = 32;
+function makePeaks(name) {
+  const buf = buffers[name], step = arr.sources[name].bar_len / PER_BAR, n = Math.ceil(buf.length / step);
+  const out = new Float32Array(n), chans = [...Array(buf.numberOfChannels).keys()].map((c) => buf.getChannelData(c));
+  for (const d of chans) for (let i = 0; i < n; i++) {
+    let m = out[i];
+    for (let j = Math.floor(i * step), e = Math.min(d.length, Math.floor((i + 1) * step)); j < e; j += 4) { const v = Math.abs(d[j]); if (v > m) m = v; }
+    out[i] = m;
+  }
+  let top = 0; for (const v of out) if (v > top) top = v;
+  if (top > 0) for (let i = 0; i < n; i++) out[i] /= top;
+  peaks[name] = out;
+}
+function waveform(e, b) {
+  const P = peaks[srcName(b)];
+  if (!P) return;
+  const src = arr.sources[srcName(b)], w = Math.max(1, Math.round(b.bars * ppb)), h = 47, r = window.devicePixelRatio || 1;
+  const c = document.createElement("canvas");
+  c.className = "wf"; c.width = w * r; c.height = h * r; c.style.width = w + "px"; c.style.height = h + "px";
+  const g = c.getContext("2d"), first = src.bar0 / (src.bar_len / PER_BAR);
+  g.scale(r, r);
+  g.fillStyle = b.lane === "vocal" || b.lane === "bass" ? "rgba(255,255,255,.5)" : "rgba(36,17,58,.32)";
+  for (let x = 0; x < w; x++) {                                   // one column per pixel: its slice of source bars
+    const s0 = b.src_bar + x / ppb / k(b), s1 = b.src_bar + (x + 1) / ppb / k(b);
+    let m = 0;
+    for (let i = Math.floor(first + s0 * PER_BAR), e2 = Math.max(i + 1, Math.ceil(first + s1 * PER_BAR)); i < e2; i++) if (P[i] > m) m = P[i];
+    const y = Math.max(0.5, m * (h / 2 - 3));
+    g.fillRect(x, h / 2 - y, 1, 2 * y);
+  }
+  e.prepend(c);
+}
+
+// ---------- split: one block becomes two at output bar p (snapped); the source carries on where it was cut ----------
+const SPLIT_FADE = 0.0625;                                         // bars: a split's crossfade (1/16 bar)
+const FADE_STEP = 1 / 16;
+function splitAt(b, p) {
+  const d = q(p - b.out_bar);
+  if (d <= 0 || d >= b.bars) return false;
+  edit(() => {
+    const right = {...JSON.parse(JSON.stringify(b)), out_bar: q(p), bars: q(b.bars - d), src_bar: q(b.src_bar + d / k(b)),
+                   fx: b.fx.filter((f) => f.type !== "pickup" && f.at + f.bars > d).map((f) => ({...f, at: q(f.at - d)}))};
+    Object.assign(right, fadeFits(right, right.bars));
+    b.fx = b.fx.filter((f) => f.at < d); b.bars = d;
+    b.fade_out = right.fade_in = SPLIT_FADE;                       // the halves crossfade at the cut
+    arr.lanes[b.lane].push(right); sel = right;
+  });
+  return true;
+}
+const laneBar = (ev, row) => snapTo((ev.clientX - row.getBoundingClientRect().left) / ppb);
+function setCutting(on) {
+  cutting = on; document.body.classList.toggle("cutting", on); $("split").classList.toggle("on", on);
+  if (!on) $("cutline").style.display = "none";
+}
+document.addEventListener("pointermove", (ev) => {                // the cut line under the pointer
+  const L = $("cutline"), e = cutting && !drag && ev.target.closest(".blk");
+  if (!e) { L.style.display = "none"; return; }
+  const p = laneBar(ev, e.parentNode), b = e.block, ok = p > b.out_bar && p < b.out_bar + b.bars;
+  L.style.display = ok ? "block" : "none";
+  L.style.left = p * ppb + "px"; L.style.top = e.parentNode.offsetTop + "px"; L.style.height = e.parentNode.offsetHeight + "px";
+});
+function drawLoop() {
+  const L = $("loop");
+  if (!loopSel) { L.style.display = "none"; return; }
+  L.style.display = "block"; L.style.left = loopSel[0] * ppb + "px"; L.style.width = (loopSel[1] - loopSel[0]) * ppb + "px";
+  L.style.opacity = loopOn ? 1 : 0.5;
+}
+function inspect() {
+  const I = $("insp");
+  if (!sel) { I.innerHTML = "Click a block to select it."; return; }
+  const g = sel.gain_db || 0;                                      // vocal blocks are often +10 to +20 dB
+  I.innerHTML = `<span><b>${sel.lane}</b> block, output bars ${fmt(sel.out_bar + 1)}–${fmt(sel.out_bar + sel.bars)}, from ${sel.src} bar ${fmt(sel.src_bar + 1)}</span>` +
+    `<label>Gain <input id="gain" type="range" min="${Math.floor(g) - 24}" max="${Math.ceil(g) + 12}" step="0.25" value="${g}"> <b id="gv">${g.toFixed(1)} dB</b></label>` +
+    `<button id="del">Delete</button>`;
+  $("gain").oninput = (e) => { $("gv").textContent = (+e.target.value).toFixed(1) + " dB"; };
+  $("gain").onchange = (e) => edit(() => { sel.gain_db = +e.target.value; });
+  $("del").onclick = () => removeSel();
+}
+
+// ---------- editing ----------
+function edit(fn) {
+  undoStack.push(JSON.stringify(arr.lanes)); if (undoStack.length > 50) undoStack.shift();
+  redoStack = []; edits++;
+  fn();
+  for (const l of LANES) arr.lanes[l].sort((a, b) => a.out_bar - b.out_bar);
+  dirty = true; draw(); say("Unsaved changes");
+}
+function restore(from, to) {
+  if (!from.length) return;
+  to.push(JSON.stringify(arr.lanes)); edits++;
+  arr.lanes = JSON.parse(from.pop()); sel = null; dirty = true; draw(); say("Unsaved changes");
+}
+function removeSel() {
+  if (!sel) return;
+  edit(() => { const L = arr.lanes[sel.lane]; L.splice(L.indexOf(sel), 1); sel = null; });
+}
+const snapTo = (x) => Math.round(x / snap) * snap;
+const fadeFits = (b, bars) => (b.fade_out > bars ? {fade_out: bars} : {});   // a fade-out never outlasts its block
+function apply(b, mode, d) {
+  // d: output bars, already snapped. Returns the block's new fields; source and grid bounds respected.
+  const kk = k(b), srcBars = arr.sources[srcName(b)].bars;
+  if (mode === "move" || mode === "copy") return {out_bar: q(Math.max(0, b.out_bar + d))};
+  if (mode === "right") {
+    const most = (srcBars - b.src_bar) * kk;                     // cannot read past the source's end
+    const bars = q(Math.min(most, Math.max(snap, b.bars + d)));
+    return {bars, ...fadeFits(b, bars)};
+  }
+  d = Math.min(d, Math.max(0, b.bars - snap));                   // left edge: keep a snap step (a shorter block only grows)
+  d = Math.max(d, -b.out_bar, -b.src_bar * kk);                  // and not before bar 0 of either track
+  return {out_bar: q(b.out_bar + d), bars: q(b.bars - d), src_bar: q(b.src_bar + d / kk), ...fadeFits(b, q(b.bars - d)),
+          fx: b.fx.filter((f) => f.type !== "pickup" || d === 0).map((f) => ({...f, at: q(f.at - d)}))};
+}
+let drag = null;
+document.addEventListener("pointerdown", (ev) => {
+  const e = ev.target.closest(".blk");
+  if (!e) {
+    if (ev.target.closest(".lane")) { sel = null; draw(); }
+    return;
+  }
+  ev.preventDefault();
+  if (cutting) {
+    if (!splitAt(e.block, laneBar(ev, e.parentNode))) say("Click inside the block, not on its edge, to split it");
+    return;
+  }
+  sel = e.block;
+  const mode = ev.target.classList.contains("fh") ? (ev.target.classList.contains("in") ? "fade_in" : "fade_out")
+    : ev.target.classList.contains("l") ? "left" : ev.target.classList.contains("r") ? "right" : ev.altKey ? "copy" : "move";
+  drag = {e, b: e.block, mode, x0: ev.clientX, d: 0};
+  e.setPointerCapture(ev.pointerId);
+  document.querySelectorAll(".blk.sel").forEach((x) => x.classList.remove("sel"));
+  e.classList.add("sel");
+  if (mode === "copy") { drag.ghost = blockEl(drag.b); drag.ghost.style.opacity = 0.5; e.parentNode.appendChild(drag.ghost); }
+  inspect();
+});
+function fadeTo(b, mode, dx) {                                    // a fade handle dragged dx bars: its new length
+  const most = mode === "fade_out" ? b.bars : Math.min(4, b.out_bar);
+  return q(Math.min(most, Math.max(0, Math.round(((b[mode] || 0) - dx) / FADE_STEP) * FADE_STEP)));   // left = longer
+}
+document.addEventListener("pointermove", (ev) => {
+  if (!drag) return;
+  if (drag.mode.startsWith("fade")) {
+    drag.d = (ev.clientX - drag.x0) / ppb;
+    const v = fadeTo(drag.b, drag.mode, drag.d);
+    if (drag.mode === "fade_out") drag.e.querySelector(".fo").style.width = v * ppb + "px";
+    say(`${drag.mode === "fade_in" ? "Fade in" : "Fade out"}: ${fmt(v)} bar${v === 1 ? "" : "s"}`);
+    return;
+  }
+  drag.d = snapTo((ev.clientX - drag.x0) / ppb);
+  const n = {...drag.b, ...apply(drag.b, drag.mode, drag.d)};
+  const t = drag.mode === "copy" ? drag.ghost : drag.e;
+  t.style.left = n.out_bar * ppb + "px"; t.style.width = Math.max(4, n.bars * ppb - 2) + "px";
+});
+document.addEventListener("pointerup", () => {
+  if (!drag) return;
+  const {b, mode, d} = drag;
+  drag.ghost && drag.ghost.remove();
+  drag = null;
+  if (mode.startsWith("fade")) {
+    const v = fadeTo(b, mode, d);
+    if (v === (b[mode] || 0)) { draw(); return; }
+    return edit(() => { if (v) b[mode] = v; else delete b[mode]; });
+  }
+  if (!d) { draw(); return; }                                    // a click: select only (a short block keeps its length)
+  const n = apply(b, mode, d), same = (key) => JSON.stringify(n[key]) === JSON.stringify(b[key]);
+  if (Object.keys(n).every(same)) { draw(); return; }            // clamped to where it was: no copy on top of it
+  edit(() => {
+    if (mode === "copy") {
+      const c = {...JSON.parse(JSON.stringify(b)), ...n};
+      arr.lanes[b.lane].push(c); sel = c;
+    } else Object.assign(b, n);
+  });
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.target.tagName === "INPUT") return;
+  const mod = ev.metaKey || ev.ctrlKey;
+  if ((ev.key === "Delete" || ev.key === "Backspace") && sel) { ev.preventDefault(); removeSel(); }
+  else if (mod && ev.key.toLowerCase() === "z") { ev.preventDefault(); ev.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack); }
+  else if (ev.key === " ") { ev.preventDefault(); togglePlay(); }
+  else if (!mod && ev.key.toLowerCase() === "s") setCutting(!cutting);
+  else if (ev.key === "Escape" && cutting) setCutting(false);
+});
+$("heads").addEventListener("click", (ev) => {
+  const m = ev.target.dataset.m, s = ev.target.dataset.s;
+  if (m) mute[m] = !mute[m];
+  if (s) solo[s] = !solo[s];
+  if (m || s) { setLaneGains(); draw(); }
+});
+// ruler: drag selects loop bars, a click sets where play starts
+let rsel = null, startBar = 0;
+const rulerBar = (ev) => (ev.clientX - $("ruler").getBoundingClientRect().left) / ppb;
+$("ruler").addEventListener("pointerdown", (ev) => {
+  rsel = {a: Math.max(0, Math.floor(rulerBar(ev))), moved: false}; $("ruler").setPointerCapture(ev.pointerId);
+});
+$("ruler").addEventListener("pointermove", (ev) => {
+  if (!rsel) return;
+  const x = rulerBar(ev), a = Math.max(0, Math.min(rsel.a, Math.floor(x))), b = Math.max(rsel.a + 1, Math.ceil(x));
+  if (Math.abs(x - rsel.a) > 0.5) { loopSel = [a, b]; rsel.moved = true; drawLoop(); }
+});
+$("ruler").addEventListener("pointerup", () => {
+  if (!rsel) return;
+  if (rsel.moved) startBar = loopSel[0];
+  else { startBar = rsel.a; loopSel = null; }                    // a click: play from this bar
+  rsel = null; drawLoop(); showStart();
+});
+function showStart() {
+  if (play) return;
+  const H = $("head"); H.style.display = "block"; H.style.opacity = 0.4; H.style.left = startBar * ppb + "px";
+}
+
+// ---------- playback (Web Audio, on the AudioContext clock) ----------
+async function loadAudio() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  // Blocks summed at their gains go past full scale (vocal gains of +10 to +20 dB are normal) and Web Audio clips
+  // there, so the preview gets 6 dB of headroom and a limiter. The rendered mix has its own mastering.
+  const master = ctx.createGain(), lim = ctx.createDynamicsCompressor();
+  master.gain.value = 0.5;
+  lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
+  master.connect(lim); lim.connect(ctx.destination);
+  for (const l of LANES) { laneGain[l] = ctx.createGain(); laneGain[l].connect(master); }
+  let done = 0;
+  for (const name of Object.keys(arr.sources)) {
+    const file = arr.sources[name].file.split("/").pop();
+    const r = await fetch(`blocks/${encodeURIComponent(file)}`, {headers: {"X-Token": TOKEN}});
+    if (!r.ok) throw new Error(`${file}: ${r.statusText}`);
+    buffers[name] = await ctx.decodeAudioData(await r.arrayBuffer());
+    say(`Loading audio ${++done}/${Object.keys(arr.sources).length}`);
+  }
+}
+function setLaneGains() {
+  const anySolo = LANES.some((l) => solo[l]);
+  for (const l of LANES) if (laneGain[l]) laneGain[l].gain.value = (anySolo ? solo[l] : !mute[l]) ? 1 : 0;
+}
+function schedule(a, b, t) {
+  // every block overlapping output bars [a, b), starting at context time t for bar a
+  const bs = barSec();
+  for (const l of LANES) for (const blk of arr.lanes[l]) {
+    const s = Math.max(blk.out_bar, a), e = Math.min(blk.out_bar + blk.bars, b);
+    if (e <= s) continue;
+    const src = arr.sources[srcName(blk)], buf = buffers[srcName(blk)];
+    if (!buf) continue;
+    const off = (src.bar0 + (blk.src_bar + (s - blk.out_bar) / k(blk)) * src.bar_len) / SR;
+    const when = t + (s - a) * bs, dur = (e - s) * bs, g = Math.pow(10, (blk.gain_db || 0) / 20);
+    const n = ctx.createBufferSource(), gn = ctx.createGain();
+    n.buffer = buf; n.connect(gn); gn.connect(laneGain[l]);
+    // the block's fades as render.py makes them: a lead-in before its first beat, a ramp over its last bars
+    const fi = s === blk.out_bar && blk.fade_in ? Math.max(0, Math.min(blk.fade_in * bs, when - t, off)) : 0;
+    const fo = e === blk.out_bar + blk.bars && blk.fade_out ? Math.min(blk.fade_out * bs, dur) : 0;
+    if (fi > 0.005) { gn.gain.setValueAtTime(0, when - fi); gn.gain.linearRampToValueAtTime(g, when); }
+    else { gn.gain.setValueAtTime(0, when); gn.gain.linearRampToValueAtTime(g, when + 0.005); }
+    if (fo > 0.005) { gn.gain.setValueAtTime(g, when + Math.max(0.005, dur - fo)); gn.gain.linearRampToValueAtTime(0, when + dur); }
+    else { gn.gain.setValueAtTime(g, when + Math.max(0.005, dur - 0.005)); gn.gain.linearRampToValueAtTime(0, when + dur); }
+    const from = when - (fi > 0.005 ? fi : 0), late = Math.max(0, ctx.currentTime - from);   // a loop cycle scheduled a little late
+    if (dur + when - from - late <= 0) continue;
+    n.start(from + late, Math.max(0, off - (when - from) + late), dur + when - from - late);
+    play.nodes.push(n);
+    if (play.first === null || when < play.first) play.first = when;
+  }
+}
+async function startPlay() {
+  if (!ctx) return;
+  const clicked = performance.now();
+  await ctx.resume();
+  stopPlay(); stopMix();                                         // Play pressed twice while resuming: one playback
+  const loop = loopOn && loopSel ? loopSel : null, from = loop ? loop[0] : startBar;
+  const t0 = ctx.currentTime + 0.06;
+  play = {t0, from, loop, nodes: [], first: null, clicked, cycle: 0};
+  if (loop) { schedule(loop[0], loop[1], t0); play.timer = setInterval(nextCycle, 200); }
+  else schedule(from, nBars(), t0);
+  $("play").textContent = "Stop"; $("play").classList.add("on"); $("head").style.opacity = 1;
+  requestAnimationFrame(tick);
+}
+function nextCycle() {
+  const {loop, t0} = play, len = (loop[1] - loop[0]) * barSec(), next = t0 + (play.cycle + 1) * len;
+  if (ctx.currentTime > next - 1.0) { play.cycle++; schedule(loop[0], loop[1], next); }
+}
+function stopPlay() {
+  if (!play) return;
+  clearInterval(play.timer);
+  play.nodes.forEach((n) => { try { n.stop(); } catch (e) {} });
+  play = null; $("play").textContent = "Play"; $("play").classList.remove("on"); showStart();
+}
+function togglePlay() { play ? stopPlay() : startPlay(); }
+function playheadBar() {
+  if (!play) return null;
+  const t = ctx.currentTime - (ctx.outputLatency || 0) - play.t0;
+  if (t < 0) return play.from;
+  if (play.loop) { const len = play.loop[1] - play.loop[0]; return play.loop[0] + ((t / barSec()) % len); }
+  return play.from + t / barSec();
+}
+function tick() {
+  if (!play) return;
+  const bar = playheadBar(), H = $("head"), S = $("scroll");
+  H.style.display = "block"; H.style.left = bar * ppb + "px";
+  if (bar * ppb > S.scrollLeft + S.clientWidth - 40 || bar * ppb < S.scrollLeft) S.scrollLeft = bar * ppb - 80;
+  if (!play.loop && bar >= nBars()) { stopPlay(); return; }
+  requestAnimationFrame(tick);
+}
+// rendered mix, for A/B against the blocks
+function stopMix() { const m = $("mix"); if (!m.paused) { m.pause(); $("mixbtn").classList.remove("on"); $("mixbtn").textContent = "Play rendered mix"; } }
+$("mixbtn").onclick = () => {
+  const m = $("mix");
+  if (!m.paused) return stopMix();
+  stopPlay();
+  m.currentTime = (loopOn && loopSel ? loopSel[0] : startBar) * barSec();
+  m.play().then(() => { $("mixbtn").classList.add("on"); $("mixbtn").textContent = "Stop rendered mix"; }).catch((e) => say(e.message, "err"));
+};
+function loadMix(has) {
+  $("mix").src = has ? `mashup.mp3?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}` : "";
+  $("mixbtn").disabled = !has;
+}
+
+// ---------- save and render ----------
+async function save() {
+  const v = edits, r = await api("api/save", {lanes: arr.lanes});   // the lanes as they are now
+  if (edits === v) dirty = false;                                 // edits made while it waited are still unsaved
+  draw(); say(`Saved (previous version: ${r.backup})${dirty ? "; later edits not saved yet" : ""}`, "ok");
+}
+$("save").onclick = () => save().catch((e) => say(e.message, "err"));
+$("render").onclick = async () => {
+  const b = $("render"); b.disabled = true;
+  try {
+    if (dirty) await save();
+    stopPlay(); stopMix();
+    say("Rendering… (about a minute)");
+    const r = await api("api/render", {});
+    loadMix(true);
+    say(`Rendered: ${r.lufs} LUFS, ${r.true_peak} dBTP${r.loudness_ok ? "" : " (outside target)"}`, r.loudness_ok ? "ok" : "err");
+  } catch (e) { say("Render failed: " + e.message, "err"); }
+  b.disabled = false;
+};
+$("play").onclick = togglePlay;
+$("loopbtn").onclick = () => { loopOn = !loopOn; $("loopbtn").classList.toggle("on", loopOn); drawLoop(); if (play) { stopPlay(); startPlay(); } };
+$("split").onclick = () => setCutting(!cutting);
+$("snap").onclick = () => { snap = snap === 1 ? 0.25 : 1; $("snap").textContent = snap === 1 ? "Snap: bar" : "Snap: beat"; };
+$("zin").onclick = () => { ppb = Math.min(96, ppb * 1.5); draw(); };
+$("zout").onclick = () => { ppb = Math.max(6, ppb / 1.5); draw(); };
+$("undo").onclick = () => restore(undoStack, redoStack);
+$("redo").onclick = () => restore(redoStack, undoStack);
+window.addEventListener("beforeunload", (ev) => { if (dirty) { ev.preventDefault(); ev.returnValue = ""; } });
+
+// the page's state and actions: for the browser console, scripted checks, and app.html (Quit reads dirty)
+window.mf = {
+  get arr() { return arr; }, get sel() { return sel; }, get dirty() { return dirty; }, apply, edit, removeSel, splitAt, setCutting, get peaks() { return peaks; }, startPlay, stopPlay, playheadBar, save,
+  clock: () => play && {ctx: ctx.currentTime, t0: play.t0, from: play.from, first: play.first, clicked: play.clicked, now: performance.now(), state: ctx.state, nodes: play.nodes.length, bar: playheadBar()},
+};
+
+api("api/arrangement").then(async (j) => {
+  arr = j.arrangement; LANES = j.lanes; SR = j.sr; SOURCE_OF = j.source_of;
+  $("title").textContent = j.folder; document.title = j.folder + " · mashup editor";
+  for (const l of LANES) arr.lanes[l] = (arr.lanes[l] || []).map((b) => ({fx: [], gain_db: 0, ...b, lane: l}));
+  draw(); loadMix(j.has_mix);
+  say("Loading audio…");
+  await loadAudio(); setLaneGains();
+  say("Drawing waveforms…"); await new Promise((r) => setTimeout(r));
+  for (const name of Object.keys(buffers)) makePeaks(name);
+  draw();
+  $("play").disabled = false; say("Ready");
+}).catch((e) => say(e.message, "err"));
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mashup Studio: settings</title>
+<style>/* studio.css */
+#setup{max-width:760px}
+#setup textarea,#setup input{width:100%;max-width:none}
+#setup textarea{min-height:0}
+#setup .row{margin-top:8px}
+code{word-break:break-all}
+</style>
+</head>
+<body>
+<header>
+  <b><i>&#x1F353;</i>Mashup Studio</b>
+  <span class="mut">Settings</span>
+</header>
+<main>
+  <p id="err" class="err" hidden></p>
+  <div id="setup">
+    <div class="card">
+      <h2>1 · Where is your music?</h2>
+      <p class="mut">Folders with mp3, m4a, aiff, wav or flac files, one per line. Mashup Studio only reads them.</p>
+      <textarea id="music" rows="3" aria-label="Music folders, one per line" spellcheck="false"></textarea>
+      <div class="row"><button id="pick-music">Add a folder…</button></div>
+    </div>
+    <div class="card">
+      <h2>2 · Where should finished mashups go?</h2>
+      <p class="mut">Export and Copy to export folder put pair folders here.</p>
+      <input id="export" aria-label="Export folder" spellcheck="false">
+      <div class="row"><button id="pick-export">Choose…</button></div>
+      <div class="row"><button id="save">Save</button><span id="save-msg" class="mut"></span></div>
+    </div>
+    <div class="card">
+      <h2>3 · Scan your music</h2>
+      <p class="mut">Reads each file's tags. Tracks without a BPM or key tag are analysed, which takes longer.
+        The next scan only reads new and changed files.</p>
+      <div class="row"><button id="scan" disabled>Scan now</button><span id="scan-msg" class="mut"></span></div>
+    </div>
+    <div class="card">
+      <h2>4 · Start</h2>
+      <div class="row"><button id="open" disabled>Open the Studio</button><span id="open-msg" class="mut"></span></div>
+    </div>
+    <p class="mut small">Settings file: <code id="file"></code></p>
+  </div>
+</main>
+<div id="restarting" hidden>Starting Mashup Studio…</div>
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const $ = (id) => document.getElementById(id);
+const api = (path, body) => fetch(path, body === undefined ? {headers: {"X-Token": TOKEN}}
+  : {method: "POST", headers: {"X-Token": TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(body)})
+  .then(async (r) => {
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) throw new Error(j.error || r.statusText);
+    return j;
+  });
+const say = (id, msg, cls = "mut") => { $(id).textContent = msg; $(id).className = cls; };
+const showErr = (e) => { $("err").textContent = e.message || String(e); $("err").hidden = false; };
+const folders = () => $("music").value.split("\n").map((s) => s.trim()).filter(Boolean);
+const SCAN = "scan the music folders";                          // the scan job's title (app.py)
+let S = null, saved = false, scanJob = null;
+
+function refresh() {
+  $("scan").disabled = !saved || scanJob !== null;
+  $("open").disabled = !saved || scanJob !== null || !S.catalog_ok;
+  say("open-msg", !saved ? "Save the folders first." : scanJob !== null ? "Wait for the scan." : S.catalog_ok ? "" : "Scan your music first.");
+}
+
+async function load(fill) {
+  S = await api("/api/setup");
+  if (fill) { $("music").value = S.music_folders.join("\n"); $("export").value = S.export_folder; }
+  saved = S.saved;
+  $("file").textContent = S.file;
+  if (S.missing.length) showErr(`Not installed: ${S.missing.join(", ")}. With Homebrew: brew install ffmpeg rubberband`);
+  refresh();
+}
+
+const edited = () => { saved = false; say("save-msg", ""); refresh(); };
+$("music").addEventListener("input", edited);
+$("export").addEventListener("input", edited);
+$("pick-music").onclick = () => api("/api/pick-folder", {what: "music"}).then((r) => {
+  if (r.path && !folders().includes(r.path)) { $("music").value = [...folders(), r.path].join("\n"); edited(); }
+}).catch(showErr);
+$("pick-export").onclick = () => api("/api/pick-folder", {what: "export"}).then((r) => {
+  if (r.path) { $("export").value = r.path; edited(); }
+}).catch(showErr);
+$("save").onclick = () => api("/api/setup", {music_folders: folders(), export_folder: $("export").value.trim()})
+  .then(async (r) => { await load(false); say("save-msg", `Saved in ${r.file}`, "okc"); })
+  .catch((e) => say("save-msg", e.message, "err"));
+
+async function poll() {
+  let j;
+  try { j = (await api("/api/jobs")).find((x) => x.id === scanJob); } catch (e) { showErr(e); }
+  if (j && (j.state === "queued" || j.state === "running")) {
+    say("scan-msg", j.lines.length ? j.lines[j.lines.length - 1] : "Starting…");
+    return setTimeout(poll, 700);
+  }
+  scanJob = null;
+  if (j) say("scan-msg", j.state === "done" ? j.lines[j.lines.length - 1] || "Done." : `Scan ${j.state}: ${j.lines.slice(-1)[0] || ""}`,
+             j.state === "done" ? "okc" : "err");
+  await load(false).catch(showErr);
+}
+$("scan").onclick = () => api("/api/scan", {}).then((r) => { scanJob = r.job; refresh(); poll(); })
+  .catch((e) => say("scan-msg", e.message, "err"));
+
+$("open").onclick = async () => {                               // a Restart: the new server reads the settings
+  try { await api("/api/restart", {}); } catch (e) { return showErr(e); }
+  $("restarting").hidden = false;
+  const t0 = Date.now(), again = async () => {                   // the new server writes a new token into the page
+    try { const r = await fetch("/", {cache: "no-store"}); if (r.ok && !(await r.text()).includes(TOKEN)) return location.assign("/"); } catch (e) {}
+    if (Date.now() - t0 > 60000) { $("restarting").textContent = "Mashup Studio did not come back: start it again from its icon."; return; }
+    setTimeout(again, 500);
+  };
+  setTimeout(again, 500);
+};
+
+load(true).then(async () => {                                   // a scan still running (page reloaded): follow it
+  const j = (await api("/api/jobs")).filter((x) => x.title === SCAN && (x.state === "queued" || x.state === "running")).pop();
+  if (j) { scanJob = j.id; refresh(); poll(); }
+}).catch(showErr);
+</script>
+</body>
+</html>

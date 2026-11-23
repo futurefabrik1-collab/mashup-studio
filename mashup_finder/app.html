@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mashup Studio</title>
+<style>/* studio.css */</style>
+</head>
+<body>
+<header>
+  <b><i>&#x1F353;</i>Mashup Studio</b>
+  <nav>
+    <button data-view="briefs">Briefs</button><button data-view="runs">Runs</button><button data-view="audition">Audition</button>
+    <button data-view="mashups">Mashups</button><button data-view="editor">Editor</button>
+  </nav>
+  <div id="job"><span class="line">No jobs yet.</span></div>
+  <button id="settings" title="Music folders, export folder, scan">Settings</button>
+  <button id="restart" title="Stop and start the server again (not while a job runs)">Restart</button>
+  <button id="quit" title="Stop the server (running jobs are cancelled)">Quit</button>
+</header>
+<div id="prog" hidden>
+  <div class="ptop"><b id="p-title"></b><span id="p-step"></span><span id="p-time"></span><button id="p-aud" hidden>Audition as they pass →</button><button id="p-cancel" hidden>Cancel</button><button id="p-hide" hidden title="Hide this">OK</button></div>
+  <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i id="p-fill"></i><em id="p-pct"></em></div>
+</div>
+<main>
+  <p id="err" class="err" hidden></p>
+  <section id="v-briefs">
+    <div class="cols">
+      <aside>
+        <button id="new-brief" style="width:100%">+ New brief</button>
+        <ul id="brief-list" style="margin-top:12px"></ul>
+      </aside>
+      <div>
+        <div id="brief-new" class="card">
+          <h2>New brief</h2>
+          <label class="fl">1 · Name it
+            <input id="new-name" placeholder="club-night" aria-label="Brief name" autocomplete="off"></label>
+          <label class="fl">2 · Say what you need, in your own words
+            <textarea id="new-words" aria-label="The brief in your own words" placeholder="Private rave, two tempos: 140 and 180. Breaks, jungle, ghettotech instrumentals. 80s and 90s vocals on top. No neuro, no jump up."></textarea></label>
+          <div class="row"><button id="draft-go">Draft the details</button><span id="draft-msg" class="mut"></span></div>
+          <p id="claude" class="badge">Claude drafting: checking…</p>
+          <p class="mut small">Claude turns this into the search filters (tempo zones, years, words to include or leave out, playlists).
+            You check and edit them before anything runs. The text is sent to Claude through your own Claude Code login.</p>
+        </div>
+        <div id="brief-edit" hidden>
+          <h2 id="brief-name"></h2>
+          <p id="brief-note" class="note" hidden></p>
+          <div id="knobs">
+            <fieldset class="kn k-song"><legend>Song · one track</legend>
+              <div class="kv kv-song"><label for="k-song">Song</label><input id="k-song" type="text" placeholder="a view to a kill" autocomplete="off" spellcheck="false"></div>
+              <div class="kv kv-song"><label for="k-role">It gives</label><select id="k-role"><option value="either">either side</option><option value="vocal">the vocal</option><option value="beat">the beat</option></select></div>
+              <p class="hint" id="k-song-msg"></p>
+            </fieldset>
+            <fieldset class="kn k-inst"><legend>Instrumental · the beat</legend>
+              <div class="kv"><label for="k-t1">Tempo</label><input type="range" id="k-t1" min="60" max="200" step="1"><output id="o-t1"></output><p class="hint">The beat's tempo in BPM. Instrumentals near it are searched, also at half or double time.</p></div>
+              <div class="kv"><label><input type="checkbox" id="k-t2on"> 2nd tempo</label><input type="range" id="k-t2" min="60" max="200" step="1"><output id="o-t2"></output><p class="hint">A second tempo zone, for a set that moves between two (say 140 and 174).</p></div>
+              <div class="kv"><label for="k-tol">Tempo ±</label><input type="range" id="k-tol" min="1" max="10" step="1"><output id="o-tol"></output><p class="hint">How far either side of each tempo an instrumental may sit before it is left out.</p></div>
+              <label class="any"><input type="checkbox" id="k-tany"> Any tempo</label>
+              <div class="pl" data-side="inst"><div class="pl-head"><b>Source playlist</b><span class="pl-files"></span><button type="button" class="pl-pick">Choose…</button></div>
+                <p class="hint pl-msg">Only beats from these playlists: drop a rekordbox .m3u8 (or .m3u / .csv) here, or choose one. Any copy of a track counts. None: the whole library.</p><div class="pl-miss"></div></div>
+            </fieldset>
+            <fieldset class="kn k-voc"><legend>Vocal · the top line</legend>
+              <div class="kv"><label for="k-y1">From</label><input type="range" id="k-y1" min="1950" max="2026" step="1"><output id="o-y1"></output><p class="hint">Release year of the vocal record, from. Tracks with no year are left out.</p></div>
+              <div class="kv"><label for="k-y2">To</label><input type="range" id="k-y2" min="1950" max="2026" step="1"><output id="o-y2"></output><p class="hint">Release year of the vocal record, up to and including.</p></div>
+              <label class="any"><input type="checkbox" id="k-yany"> Any year</label>
+              <div class="pl" data-side="vocal"><div class="pl-head"><b>Source playlist</b><span class="pl-files"></span><button type="button" class="pl-pick">Choose…</button></div>
+                <p class="hint pl-msg">Only vocals from these playlists: drop a rekordbox .m3u8 (or .m3u / .csv) here, or choose one. Any copy of a track counts. None: the whole library.</p><div class="pl-miss"></div></div>
+            </fieldset>
+            <fieldset class="kn k-match"><legend>Search</legend>
+              <div class="kv"><label for="k-str">Max stretch</label><input type="range" id="k-str" min="1" max="25" step="0.5"><output id="o-str"></output><p class="hint">How far the vocal may be sped up or slowed down to sit on the beat. Up to 6% sounds natural; past about 12% voices start to sound rushed or dragged.</p></div>
+              <div class="kv"><label for="k-top">Pairs to check</label><input type="range" id="k-top" min="5" max="60" step="1"><output id="o-top"></output><p class="hint">How many of the best pairs get the full audio check (stems, key fit, a preview to audition). This is the slow part, and it can't check more than the shortlist holds.</p></div>
+              <div class="kv"><label for="k-pv">Per vocal</label><input type="range" id="k-pv" min="1" max="60" step="1"><output id="o-pv"></output><p class="hint">How many different beats one vocal may be paired with. 1 means every pair has a different vocal; for a one-song brief set it as high as Pairs to check.</p></div>
+              <div class="kv"><label for="k-pi">Per beat</label><input type="range" id="k-pi" min="1" max="60" step="1"><output id="o-pi"></output><p class="hint">How many vocals one instrumental may carry. Lower it to see more different beats; for a one-song brief where the song is the beat, set it as high as Pairs to check.</p></div>
+              <div class="kv"><label for="k-lim">Shortlist</label><input type="range" id="k-lim" min="20" max="300" step="10"><output id="o-lim"></output><p class="hint">How many pairs the quick catalog match keeps (best first) before the audio check picks from the top of it.</p></div>
+              <p class="mut small" id="k-time"></p>
+            </fieldset>
+          </div>
+          <p id="k-count" class="count" aria-live="polite"></p>
+          <details id="brief-raw"><summary>All details (text)</summary>
+          <textarea id="brief-text" spellcheck="false" aria-label="Brief details (TOML)"></textarea>
+          </details>
+          <div class="row"><button id="brief-save">Save</button><button id="brief-run">Run: find + check</button><span id="brief-msg" class="mut"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="v-runs" hidden>
+    <h2>Runs</h2>
+    <div class="row"><button id="surprise" title="A strong vocal from your library at random, and its 3 best partners">🎲 Surprise me</button><span id="surprise-msg" class="mut"></span></div>
+    <table><thead><tr><th>Run</th><th class="n">Checked</th><th class="n">Passed</th><th class="n">Kept</th><th class="n">Mashups</th><th></th></tr></thead><tbody id="run-rows"></tbody></table>
+  </section>
+  <section id="v-audition" hidden>
+    <h2 id="aud-title"></h2>
+    <div class="row"><button id="export">Export kept</button><span id="export-msg" class="mut"></span>
+      <a id="aud-page" target="_blank" rel="noopener">Standalone page ↗</a></div>
+    <div class="row" id="aud-tools"><button id="radio" aria-pressed="false" title="Play the previews one after another">▶ Radio</button>
+      <label>Make with <select id="aud-tpl"></select></label>
+      <span class="mut small">Keys: <kbd>K</kbd> keep · <kbd>S</kbd> skip · <kbd>←</kbd> <kbd>→</kbd> previous, next · <kbd>Space</kbd> play or pause</span></div>
+    <p id="aud-checking" class="note" hidden></p>
+    <div id="cards"></div>
+  </section>
+  <section id="v-mashups" hidden>
+    <div class="row" id="mash-tabs"><button data-mt="all">All mashups</button><button data-mt="run" id="mt-run">One run</button></div>
+    <h2 id="mash-title"></h2>
+    <div class="row" id="mash-filter" hidden><input type="search" id="f-text" placeholder="artist or title" aria-label="Filter by artist or title">
+      <label>Run <select id="f-run"><option value="">all</option></select></label>
+      <label>Template <select id="f-tpl"><option value="">all</option></select></label>
+      <label class="any"><input type="checkbox" id="f-ssd"> not in the export folder yet</label></div>
+    <div class="row" id="mash-all" hidden><label>Template <select id="all-tpl"></select></label>
+      <button id="make-all">Make all kept</button><button id="copy-all">Copy all to export folder</button><span id="all-msg" class="mut"></span></div>
+    <div id="pairs"></div>
+  </section>
+  <section id="v-editor" hidden>
+    <div class="row"><span id="ed-title" class="mut">Open a mashup from Mashups (Edit).</span><button id="ed-back">Back to Mashups</button></div>
+    <iframe id="ed-frame" title="Block editor"></iframe>
+  </section>
+  <details id="log-box"><summary>Job log</summary><div id="log"></div></details>
+</main>
+<div id="restarting" hidden>Restarting Mashup Studio…</div>
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const $ = (id) => document.getElementById(id);
+const enc = encodeURIComponent;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const api = (path, body) => fetch(path, body === undefined ? {headers: {"X-Token": TOKEN}}
+  : {method: "POST", headers: {"X-Token": TOKEN, "Content-Type": "application/json"}, body: JSON.stringify(body)})
+  .then(async (r) => {
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 403 && /session token/.test(j.error || "")) {   // restarted from another tab: a new token
+      if (!unsaved()) location.reload();
+      else j.error = "Mashup Studio was restarted: copy your unsaved changes, then reload the page";
+    }
+    if (!r.ok || j.ok === false) { const e = new Error(j.error || r.statusText); e.status = r.status; throw e; }
+    return j;
+  });
+const S = {view: "briefs", brief: null, briefDirty: false, run: null, data: null, state: null, editing: null, jobsSeen: "", logSeen: "", liveSeen: "", mashAll: true, count: null, leaving: false, allList: null, surprise: null};
+const say = (id, msg, cls = "mut") => { $(id).textContent = msg; $(id).className = cls; };
+const unsaved = () => {                                          // what a reload would lose: brief, new words, editor
+  const ed = $("ed-frame").contentWindow;
+  return S.briefDirty || !!$("new-words").value.trim() || !!(ed && ed.mf && ed.mf.dirty);
+};
+const showErr = (e) => { $("err").textContent = e.message; $("err").hidden = false; };
+const fail = (id) => (e) => say(id, e.message, "err");
+
+// ---------- views ----------
+function show(view) {
+  if (view !== "audition" && S.view === "audition") { radio(false); document.querySelectorAll("#cards audio").forEach((a) => a.pause()); }
+  S.view = view;
+  document.querySelectorAll("main > section").forEach((s) => { s.hidden = s.id !== "v-" + view; });
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+  refresh();
+}
+async function refresh() {
+  try {
+    if (S.view === "briefs") await loadBriefs();
+    if (S.view === "runs") await loadRuns();
+    if (S.view === "audition" || S.view === "mashups") await loadRun();
+    $("err").hidden = true;
+  } catch (e) { showErr(e); }
+}
+
+// Briefs
+async function loadBriefs() {
+  const names = await api("/api/briefs");
+  $("brief-list").innerHTML = names.map((n) => `<li><button data-brief="${esc(n)}" class="${n === S.brief ? "on" : ""}">${esc(n)}</button></li>`).join("")
+    || `<li class="mut">No briefs yet.</li>`;
+}
+async function openBrief(name) {
+  if (S.briefDirty && !confirm(`Drop the unsaved changes to ${S.brief}?`)) return;
+  const j = await api("/api/brief?name=" + enc(name));
+  setBrief(name, j.text);
+}
+function setBrief(name, text, note) {
+  S.brief = name; S.briefDirty = false;
+  $("brief-new").hidden = true; $("brief-edit").hidden = false;
+  $("brief-name").textContent = name;
+  $("brief-note").textContent = note || ""; $("brief-note").hidden = !note;
+  $("brief-text").value = text; readKnobs(); C.failed = null; countSoon();
+  say("brief-msg", ""); loadBriefs();
+}
+$("brief-list").onclick = (e) => { const b = e.target.closest("button[data-brief]"); if (b) openBrief(b.dataset.brief).catch(fail("brief-msg")); };
+$("new-brief").onclick = () => {
+  if (S.briefDirty && !confirm(`Drop the unsaved changes to ${S.brief}?`)) return;
+  S.brief = null; S.briefDirty = false;
+  $("brief-edit").hidden = true; $("brief-new").hidden = false; say("draft-msg", ""); loadBriefs(); $("new-name").focus();
+};
+$("new-name").oninput = () => { const v = $("new-name").value, c = v.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, ""); if (c !== v) $("new-name").value = c; };
+$("draft-go").onclick = async () => {
+  const name = $("new-name").value.trim(), words = $("new-words").value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) { $("new-name").focus(); return say("draft-msg", "Give it a name first: letters, digits, dashes.", "err"); }
+  if (!words) { $("new-words").focus(); return say("draft-msg", "Write the brief first.", "err"); }
+  $("draft-go").disabled = true; say("draft-msg", "Drafting… about 20 seconds.");
+  try {
+    const r = await confirmed("/api/draft-brief", {name, words}, "Draft a new version over it? The old one is kept as a backup when you save.");
+    setBrief(name, r.text, r.note);
+    S.briefDirty = true; say("brief-msg", "Draft, not saved yet.");
+    $("new-name").value = $("new-words").value = "";
+  } catch (e) { say("draft-msg", e.message, "err"); }
+  $("draft-go").disabled = false;
+};
+$("brief-text").oninput = () => { S.briefDirty = true; say("brief-msg", "Not saved yet."); readKnobs(); countSoon(); };
+// ---------- brief sliders: each writes one line of the brief text, and reads it back when the text changes ----------
+const K = {
+  sec(text, name) {                                    // [start, end) line indexes of [name], or null
+    const L = text.split("\n"), i = L.findIndex((l) => l.trim() === `[${name}]` || l.trim().startsWith(`[${name}]`));
+    if (i < 0) return null;
+    let j = i + 1; while (j < L.length && !/^\s*\[/.test(L[j])) j++;
+    return [i, j];
+  },
+  get(text, name, key) {
+    const r = K.sec(text, name); if (!r) return undefined;
+    const L = text.split("\n");
+    for (let i = r[0] + 1; i < r[1]; i++) {
+      const m = new RegExp(`^\\s*${key}\\s*=\\s*(\\[(?:\\s*"(?:[^"\\\\]|\\\\.)*"\\s*,?)*\\s*\\]|"(?:[^"\\\\]|\\\\.)*"|'[^']*'|[^#]*?)\\s*(#.*)?$`).exec(L[i]);   // a "string" (or a list of them) may hold a #
+      if (m) { try { return JSON.parse(m[1]); } catch (e) { return /^'.*'$/.test(m[1]) ? m[1].slice(1, -1) : m[1]; } }
+    }
+    return undefined;
+  },
+  set(text, name, key, value) {                        // value null = remove the line
+    const L = text.split("\n"); let r = K.sec(text, name);
+    const line = (old) => {                            // a line's comment explains its value: kept only while that stays
+      const m = /^\s*[\w-]+\s*=\s*([^#]*?)(\s+#.*)?$/.exec(old || "");
+      return `${key} = ${value}${m && m[2] && m[1].replace(/\s/g, "") === String(value).replace(/\s/g, "") ? m[2] : ""}`;
+    };
+    if (!r) {
+      if (value == null) return text;
+      while (L.length && L[L.length - 1].trim() === "") L.pop();
+      L.push("", `[${name}]`, line()); return L.join("\n") + "\n";
+    }
+    for (let i = r[0] + 1; i < r[1]; i++) {
+      if (new RegExp(`^\\s*${key}\\s*=`).test(L[i])) {
+        if (value == null) L.splice(i, 1); else L[i] = line(L[i]);
+        return L.join("\n");
+      }
+    }
+    if (value == null) return text;
+    let at = r[1]; while (at > r[0] + 1 && L[at - 1].trim() === "") at--;
+    L.splice(at, 0, line()); return L.join("\n");
+  },
+  drop(text, name) {                                   // the whole [name] section
+    const r = K.sec(text, name); if (!r) return text;
+    const L = text.split("\n"); L.splice(r[0], r[1] - r[0]); return L.join("\n");
+  },
+};
+const KN = [                                           // slider id, section, key, default
+  ["k-tol", "inst", "tempo_tol", 4], ["k-str", "match", "max_stretch", 8], ["k-top", "match", "top", 12],
+  ["k-pv", "match", "per_vocal", 2], ["k-pi", "match", "per_inst", 2], ["k-lim", "match", "limit", 40],
+];
+const fmt = {"k-tol": (v) => `±${v}%`, "k-str": (v) => `${v}%`, "k-t1": (v) => `${v}`, "k-t2": (v) => `${v}`};
+const knobOut = (id) => { const o = $("o-" + id.slice(2)); if (o) o.textContent = (fmt[id] || String)($(id).value); };
+let syncing = false;
+function readKnobs() {                                  // text -> sliders
+  if (syncing) return;
+  const t = $("brief-text").value, num = (v, d) => (typeof v === "number" ? v : d);
+  const tempo = K.get(t, "inst", "tempo"), tz = Array.isArray(tempo) ? tempo.filter((x) => typeof x === "number") : [];
+  $("k-tany").checked = !tz.length;
+  $("k-t1").value = tz[0] ?? 174; $("k-t2on").checked = tz.length > 1; $("k-t2").value = tz[1] ?? 140;
+  const yrs = K.get(t, "vocal", "years"), yz = Array.isArray(yrs) && yrs.length === 2 ? yrs : null;
+  $("k-yany").checked = !yz; $("k-y1").value = yz ? yz[0] : 1980; $("k-y2").value = yz ? yz[1] : 1999;
+  for (const [id, sec, key, d] of KN) $(id).value = num(K.get(t, sec, key), d);
+  const song = K.get(t, "song", "text"), role = K.get(t, "song", "role");
+  $("k-song").value = typeof song === "string" ? song : ""; $("k-role").value = ["vocal", "beat"].includes(role) ? role : "either";
+  paintKnobs(); paintPlaylists();
+}
+function paintKnobs() {
+  const tany = $("k-tany").checked, t2 = $("k-t2on").checked;
+  ["k-t1", "k-tol"].forEach((id) => { $(id).disabled = tany; $(id).closest(".kv").classList.toggle("off", tany); });
+  $("k-t2on").disabled = tany; $("k-t2").disabled = tany || !t2; $("k-t2").closest(".kv").classList.toggle("off", tany || !t2);
+  const yany = $("k-yany").checked;
+  ["k-y1", "k-y2"].forEach((id) => { $(id).disabled = yany; $(id).closest(".kv").classList.toggle("off", yany); });
+  ["k-t1", "k-t2", "k-y1", "k-y2", ...KN.map((k) => k[0])].forEach(knobOut);
+  $("o-y1").textContent = $("k-y1").value; $("o-y2").textContent = $("k-y2").value;
+  const top = +$("k-top").value;
+  const lim = +$("k-lim").value, n = Math.min(top, lim);
+  $("k-time").textContent = `Audio check: about ${Math.round(n * 0.5)}–${n} min for ${n} pairs (less when stems are cached).` +
+    (top > lim ? ` Only ${lim} will be checked: the shortlist holds ${lim}. Raise Shortlist to check ${top}.` : "");
+  $("k-time").classList.toggle("warn", top > lim);
+}
+function writeKnobs(ev) {                               // sliders -> text
+  let y1 = +$("k-y1").value, y2 = +$("k-y2").value;
+  if (y1 > y2) { if (ev && ev.target.id === "k-y1") $("k-y2").value = y2 = y1; else $("k-y1").value = y1 = y2; }
+  let t = $("brief-text").value;
+  const zones = $("k-tany").checked ? null : `[${[+$("k-t1").value, ...($("k-t2on").checked ? [+$("k-t2").value] : [])].sort((a, b) => a - b).join(", ")}]`;
+  t = K.set(t, "inst", "tempo", zones);
+  t = K.set(t, "inst", "tempo_tol", zones ? +$("k-tol").value : null);
+  t = K.set(t, "vocal", "years", $("k-yany").checked ? null : `[${y1}, ${y2}]`);
+  for (const [id, sec, key] of KN) if (sec === "match") t = K.set(t, sec, key, +$(id).value);
+  const song = $("k-song").value.trim();
+  t = song ? K.set(K.set(t, "song", "text", JSON.stringify(song)), "song", "role", JSON.stringify($("k-role").value)) : K.drop(t, "song");
+  syncing = true; $("brief-text").value = t; syncing = false;
+  S.briefDirty = true; say("brief-msg", "Not saved yet.");
+  paintKnobs(); countSoon();
+}
+document.querySelectorAll("#knobs input, #knobs select").forEach((el) => { el.addEventListener("input", writeKnobs); });
+// ---------- source playlists: each side's `from` list. Choose… opens the Mac's Open dialog (the file stays where it
+// is); a dropped file is kept in briefs/playlists/ (a page cannot see where a dropped file lives). ----------
+const PL = {
+  list(side) { const v = K.get($("brief-text").value, side, "from"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : []; },
+  set(side, files) {
+    syncing = true; $("brief-text").value = K.set($("brief-text").value, side, "from", files.length ? JSON.stringify(files) : null); syncing = false;
+    S.briefDirty = true; say("brief-msg", "Not saved yet."); paintPlaylists(); countSoon();
+  },
+  add(side, path) { const l = PL.list(side); if (!l.includes(path)) PL.set(side, [...l, path]); },
+  types: /\.(m3u8?|csv)$/i,
+};
+const base = (f) => f.split("/").pop();
+function paintPlaylists() {
+  const fresh = S.count && C.text === $("brief-text").value;     // the count shown is for the text as it is
+  for (const box of document.querySelectorAll(".pl")) {
+    const side = box.dataset.side, files = PL.list(side), st = fresh && S.count.playlists && S.count.playlists[side];
+    box.querySelector(".pl-files").innerHTML = files.map((f, i) =>
+      `<span class="chip" title="${esc(f)}">${esc(base(f))}<button type="button" data-rm="${i}" aria-label="Remove ${esc(base(f))}">×</button></span>`).join("")
+      || `<span class="mut">none</span>`;
+    const msg = box.querySelector(".pl-msg"), miss = box.querySelector(".pl-miss");
+    if (st) {
+      const all = st.found === st.total;
+      msg.textContent = `${st.found} of ${st.total} playlist tracks found${all ? "." : ": the others are left out."}`;
+      msg.className = "hint pl-msg " + (st.found ? (all ? "okc" : "warn") : "err");
+      miss.innerHTML = st.missing.length ? `<details><summary>${st.missing.length + st.more} not found</summary><ul>` +
+        st.missing.map((m) => `<li title="${esc(m.path)}">${esc(base(m.path))} <span class="mut">· ${esc(m.why)}</span></li>`).join("") +
+        (st.more ? `<li class="mut">… and ${st.more} more</li>` : "") + `</ul></details>` : "";
+    } else {
+      msg.className = "hint pl-msg"; miss.innerHTML = "";
+      msg.textContent = files.length ? "Counting…" : `Only ${side === "inst" ? "beats" : "vocals"} from these playlists: drop a rekordbox .m3u8 (or .m3u / .csv) here, or choose one. Any copy of a track counts. None: the whole library.`;
+    }
+  }
+}
+for (const box of document.querySelectorAll(".pl")) {
+  const side = box.dataset.side;
+  box.onclick = async (e) => {
+    const rm = e.target.closest("button[data-rm]");
+    if (rm) { const l = PL.list(side); l.splice(+rm.dataset.rm, 1); return PL.set(side, l); }
+    if (!e.target.closest(".pl-pick")) return;
+    const b = e.target.closest(".pl-pick"); b.disabled = true;
+    say("brief-msg", "Choose the playlist in the Open window (it may be behind this one).");
+    try { const r = await api("/api/pick-playlist", {}); if (r.path) PL.add(side, r.path); else say("brief-msg", S.briefDirty ? "Not saved yet." : ""); }
+    catch (err) { say("brief-msg", err.message, "err"); }
+    b.disabled = false;
+  };
+  box.ondragover = (e) => { e.preventDefault(); box.classList.add("drop"); };
+  box.ondragleave = () => box.classList.remove("drop");
+  box.ondrop = async (e) => {
+    e.preventDefault(); box.classList.remove("drop");
+    for (const f of e.dataTransfer.files) {
+      if (!PL.types.test(f.name)) { say("brief-msg", `${f.name} is not a playlist: drop an .m3u8, .m3u or .csv file.`, "err"); continue; }
+      try { const r = await api("/api/save-playlist", {name: f.name, text: await f.text()}); PL.add(side, r.path); }
+      catch (err) { say("brief-msg", err.message, "err"); }
+    }
+  };
+}
+window.addEventListener("dragover", (e) => e.preventDefault());   // a file dropped beside a box must not open in the tab
+window.addEventListener("drop", (e) => e.preventDefault());
+// ---------- live count: the brief's catalog match as typed (no audio, nothing written). One count at a time: a
+// change while one runs is counted once it is back (on a whole library a count takes seconds). ----------
+const C = {timer: null, running: null, text: null, failed: null}; // C.text: the brief text S.count is for
+function countSoon() { clearTimeout(C.timer); C.timer = setTimeout(countNow, 400); }
+async function countNow(retry = false) {                          // S.count for the text as it is now (null: failed)
+  clearTimeout(C.timer);
+  while (C.running) await C.running;
+  const text = $("brief-text").value;
+  if (text === C.text) return S.count;
+  if (text === C.failed && !retry) return null;                    // asked again only on a change, or by Run
+  $("k-count").classList.add("busy");
+  C.running = api("/api/count", {text}).then((c) => {
+    S.count = c;
+    say("k-count", c.line + (c.why ? ` · ${c.why}` : ""), c.pairs ? "count" : "count none");
+    say("k-song-msg", c.song ? c.song.hint : "Empty for a brief about a whole set. With a song, it is paired with the best partners the filters allow.",
+        c.song && !c.song.matches ? "hint err" : "hint");
+    C.text = text; C.failed = null; paintPlaylists();
+  }, (e) => { S.count = null; C.failed = text; C.text = null; say("k-count", "Can't count: " + e.message, "count none"); say("k-song-msg", "", "hint"); paintPlaylists(); })
+    .finally(() => { C.running = null; });
+  await C.running;
+  return countNow();                                               // typed on meanwhile: count that too
+}
+
+async function saveBrief() {
+  const r = await api("/api/brief", {name: S.brief, text: $("brief-text").value});
+  S.briefDirty = false; say("brief-msg", r.backup ? `Saved (previous version kept as ${r.backup}).` : "Saved.", "okc"); loadBriefs();
+}
+$("brief-save").onclick = () => saveBrief().catch(fail("brief-msg"));
+$("brief-run").onclick = async () => {
+  $("brief-run").disabled = true;                                  // one click, one run
+  const name = S.brief;
+  try {
+    if (K.get($("brief-text").value, "song", "text") != null) {    // a song brief: say first when the song matches nothing
+      say("brief-msg", "Counting first…");
+      const c = await countNow(true);
+      if (S.brief !== name) return say("brief-msg", "Another brief was opened meanwhile: nothing was run.", "err");
+      if (!c || (c.song && !c.song.matches)) {
+        if (!confirm(`${c ? c.song.hint : $("k-count").textContent}\n\nRun anyway?`)) return say("brief-msg", "Not run: fix the Song box.", "err");
+      }
+    }
+    if (S.briefDirty) await saveBrief();
+    const r = await api("/api/run-brief", {name});
+    say("brief-msg", `Job ${r.job} queued: find + check. The new run shows under Runs when it is done.`, "okc"); poll();
+  } catch (e) { say("brief-msg", e.message, "err"); }
+  finally { $("brief-run").disabled = false; }
+};
+
+// Runs
+async function loadRuns() {
+  const runs = await api("/api/runs");
+  $("run-rows").innerHTML = runs.map((r) => `<tr><td>${esc(r.name)}</td><td class="n">${r.checked}</td><td class="n">${r.ok}</td><td class="n">${r.kept}</td><td class="n">${r.mashups}</td>
+    <td><button data-run="${esc(r.name)}" data-to="audition">Audition</button> <button data-run="${esc(r.name)}" data-to="mashups">Mashups</button>
+    <button data-del="${esc(r.name)}" title="Move this run to the Trash">Delete</button></td></tr>`).join("")
+    || `<tr><td colspan="6" class="mut">No runs yet: run a brief.</td></tr>`;
+}
+$("surprise").onclick = () => api("/api/surprise", {}).then((r) => {
+  S.surprise = r.job; say("surprise-msg", `${r.vocal}: finding its best partners. Audition opens as soon as the first is checked.`, "okc"); poll();
+}).catch(fail("surprise-msg"));
+$("run-rows").onclick = async (e) => {
+  const b = e.target.closest("button[data-run]"), del = e.target.closest("button[data-del]");
+  if (b) { S.run = b.dataset.run; S.mashAll = false; show(b.dataset.to); }
+  if (del) {
+    try {
+      await confirmed("/api/delete-run", {run: del.dataset.del}, "It goes to the Trash; Finder can put it back.");
+      if (S.run === del.dataset.del) S.run = null;
+      if (S.editing && S.editing.run === del.dataset.del) closeEditor();
+      refresh();
+    } catch (err) { showErr(err); }
+  }
+};
+
+// Audition (one run) and Mashups (its kept pairs)
+async function loadRun() {
+  const title = S.view === "audition" ? "aud-title" : "mash-title";
+  if (S.view === "mashups") {
+    $("mt-run").textContent = S.run ? `Kept pairs of ${S.run}` : "One run"; $("mt-run").disabled = !S.run;
+    document.querySelectorAll("#mash-tabs button").forEach((b) => b.classList.toggle("on", (b.dataset.mt === "all") === !!S.mashAll));
+    $("mash-filter").hidden = !(S.mashAll || !S.run); $("mash-all").hidden = !$("mash-filter").hidden;
+    if (S.mashAll || !S.run) { S.mashAll = true; return drawAll(S.allList = await api("/api/mashups")); }
+  }
+  if (!S.run) { $(title).textContent = "Pick a run under Runs."; $("cards").innerHTML = $("pairs").innerHTML = ""; $("cards").dataset.key = ""; return; }
+  S.data = await api("/api/run?name=" + enc(S.run));
+  S.view === "audition" ? drawAudition() : drawMashups();
+}
+const ok = (p) => p.deep && p.deep.ok;
+const pct = (x) => `${x >= 0 ? "+" : ""}${(x * 100).toFixed(1)}%`;
+function pairMeta(p) {
+  const d = p.deep || {};
+  const a = `score ${Math.round(p.final ?? p.score)} · stretch ${pct(d.stretch_audio ?? p.stretch)} · vocal shift ${(d.shift_audio ?? p.shift) >= 0 ? "+" : ""}${d.shift_audio ?? p.shift} st · keys ${esc(p.vocal_key)} → ${esc(p.inst_key)}`;
+  return ok(p) ? `${a}<br>harmonic fit ${d.harm_rank}/12 · vocal active ${Math.round(d.vocal_active * 100)}% · ${d.bpm_a.toFixed(1)} → ${d.bpm_b.toFixed(1)} BPM · drift ${d.drift_ms ?? "?"} ms`
+    : `${a}<br><span class="err">not rendered: ${esc(d.why || "not checked")}</span>`;
+}
+function exportState() {
+  const kept = Object.values(S.data.marks).filter((m) => m === "keep").length, ssd = S.state.ssd;
+  $("export").disabled = !ssd.ok || !kept;
+  say("export-msg", !ssd.ok ? `${ssd.path} is not there: connect its drive, or choose another export folder in Settings.` : kept ? `${kept} kept → ${ssd.path}` : "Keep a pair to export it.");
+}
+function fillSelect(sel, values, first = null, pick = "") {    // options, keeping the choice; first: an "all" option
+  const v = sel.value || pick;
+  sel.innerHTML = (first === null ? "" : `<option value="">${esc(first)}</option>`)
+    + [...new Set(values)].map((x) => `<option${x === v ? " selected" : ""}>${esc(x)}</option>`).join("");
+}
+function drawAudition() {                                          // live while the run is being checked: new cards only
+  const d = S.data, c = S.state && S.state.checking, live = !!(c && c.run === d.name);
+  $("aud-title").textContent = `${d.name}${d.brief ? " · brief " + d.brief : ""} · ${d.pairs.filter(ok).length} with previews`;
+  $("aud-page").href = `/r/${enc(d.name)}/audition.html`;
+  exportState(); fillSelect($("aud-tpl"), S.state.templates, null, "club");
+  $("aud-checking").hidden = !live;
+  if (live) $("aud-checking").textContent = `Still checking ${c.done}/${c.total}: pairs appear here as they pass.`;
+  const card = (p, rank) => {
+    const d2 = p.deep || {};
+    const src = ok(p) && d2.preview ? `/r/${enc(d.name)}/previews/${enc(d2.preview.split("/").pop())}?t=${enc(TOKEN)}` : "";
+    return `<div class="card" data-id="${p.id}"><div class="t">${rank}. ${esc(p.vocal_label)} <small>vocal</small> · ${esc(p.inst_label)} <small>instrumental</small></div>
+      <div class="m">${pairMeta(p)}</div>${src ? `<div class="wave" title="Click to play from there"><canvas></canvas></div><audio controls preload="none" src="${src}"></audio>` : ""}
+      ${ok(p) ? `<div class="row"><button data-mark="keep">Keep</button><button data-mark="skip">Skip</button>
+      <button data-km title="Keep it, then make a mashup with the template above">Keep + Make</button>
+      <button data-go="mashups" hidden>Make a mashup →</button><span class="mut msg"></span></div>` : ""}</div>`;
+  };
+  const good = d.pairs.filter(ok), bad = d.pairs.filter((p) => !ok(p)), was = $("cards").dataset.key;
+  const key = live && was === d.name + ":ranked" ? was : live ? d.name : d.name + ":ranked";   // a Prepare adds to the list
+  if (was !== key || (!live && $("cards").dataset.grown === d.name)) {   // a new list (ranked unless still growing), or
+    $("cards").dataset.key = key; $("cards").dataset.grown = "";        // ranked again once a Prepare's pairs are in
+    $("cards").innerHTML = `<div id="good"></div><details id="bad" hidden><summary></summary><div></div></details>`;
+    if (!live) good.sort((a, b) => (b.final ?? b.score) - (a.final ?? a.score));   // a cut-off check has no final yet
+  }
+  const have = new Set([...document.querySelectorAll("#cards .card")].map((x) => x.dataset.id)), added = [];
+  const add = (list, where, rank) => list.filter((p) => !have.has(String(p.id))).forEach((p) => {
+    where.insertAdjacentHTML("beforeend", card(p, rank())); added.push(where.lastElementChild);
+  });
+  add(good, $("good"), () => $("good").querySelectorAll(".card").length + 1);
+  add(bad, $("bad").lastElementChild, () => "–");
+  if (live && key.endsWith(":ranked") && added.length) $("cards").dataset.grown = d.name;   // re-rank when it ends
+  $("bad").hidden = !bad.length;
+  $("bad").firstElementChild.textContent = `${bad.length} pair${bad.length === 1 ? "" : "s"} rejected by the audio check`;
+  if (!good.length) $("good").innerHTML = `<p class="mut">${live ? "Checking: the first pairs appear here when they pass." : "No pair passed the audio check."}</p>`;
+  else $("good").querySelector("p.mut")?.remove();
+  document.querySelectorAll("#cards .card").forEach((x) => paintMark(x, d.marks[x.dataset.id] || ""));
+  added.forEach((x) => Wave.watch(x));
+  radioAdded(added);
+}
+function paintMark(c, k) {                                       // in place, so a playing preview keeps playing
+  c.classList.toggle("keep", k === "keep"); c.classList.toggle("skip", k === "skip");
+  c.querySelectorAll("button[data-mark]").forEach((x) => x.classList.toggle("on", x.dataset.mark === k));
+  const go = c.querySelector("button[data-go]");
+  if (go) go.hidden = k !== "keep";
+}
+async function mark(c, k, toggle = true) {                         // keep/skip (again: clear) one pair
+  const id = +c.dataset.id, m = toggle && S.data.marks[id] === k ? null : k;
+  S.data.marks = (await api("/api/mark", {run: S.data.name, id, mark: m})).marks;
+  paintMark(c, S.data.marks[id] || ""); exportState();
+}
+$("cards").onclick = async (e) => {
+  const c = e.target.closest(".card"), b = e.target.closest("button");
+  if (!c) return;
+  const w = e.target.closest(".wave");
+  if (w) return Wave.seek(c, e);
+  if (!b) return;
+  if (b.dataset.go) return show("mashups");
+  try {
+    if ("km" in b.dataset) {
+      await mark(c, "keep", false);
+      const r = await confirmed("/api/mashup", {run: S.data.name, id: +c.dataset.id, template: $("aud-tpl").value, variations: 1}, "Make it again?");
+      c.querySelector(".msg").textContent = `Kept · job ${r.job} queued: ${$("aud-tpl").value} mashup.`; poll();
+    } else await mark(c, b.dataset.mark);
+  } catch (err) { if (c.querySelector(".msg")) { c.querySelector(".msg").textContent = err.message; c.querySelector(".msg").className = "err msg"; } else say("export-msg", err.message, "err"); }
+};
+// ---------- radio and keys: one current card; radio plays the previews one after another ----------
+const R = {on: false, cur: null, waiting: false};
+const liveCards = () => [...document.querySelectorAll("#good .card")];
+function setCur(c, scroll = true) {
+  document.querySelectorAll("#cards .card.cur").forEach((x) => x.classList.remove("cur"));
+  R.cur = c ? c.dataset.id : null;
+  if (!c) return;
+  c.classList.add("cur");
+  if (scroll) c.scrollIntoView({block: "center", behavior: "smooth"});
+}
+function go(step, play) {                                          // the next or previous card; play it if asked
+  const L = liveCards(); if (!L.length) return;
+  let i = L.findIndex((c) => c.dataset.id === R.cur);
+  i = i < 0 ? 0 : i + step;
+  R.waiting = R.on && i >= L.length;                               // past the last: wait for the next pair (live), or stop
+  if (i < 0 || i >= L.length) return;
+  document.querySelectorAll("#cards audio").forEach((a) => a.pause());
+  setCur(L[i]);
+  if (play) L[i].querySelector("audio")?.play().catch(() => {});
+}
+const curCard = () => R.cur && $("good")?.querySelector(`.card[data-id="${R.cur}"]`);
+const playing = (where = "#cards") => [...document.querySelectorAll(`${where} audio`)].some((a) => !a.paused);
+function radioAdded(cards) {                                       // after a redraw: the current card, and the next one
+  curCard()?.classList.add("cur");                                 // for a radio that ran out while pairs were checked
+  if (R.on && R.waiting && cards.some((c) => c.closest("#good"))) go(1, true);
+}
+function radio(on) {
+  R.on = on; R.waiting = false;
+  $("radio").classList.toggle("on", on); $("radio").setAttribute("aria-pressed", on); $("radio").textContent = on ? "■ Radio on" : "▶ Radio";
+}
+$("radio").onclick = () => {
+  radio(!R.on);
+  if (R.on && !playing()) { const c = curCard(); c ? c.querySelector("audio")?.play().catch(() => {}) : go(0, true); }
+};
+document.addEventListener("ended", (e) => { if (R.on && e.target.closest?.("#good .card")) go(1, true); }, true);
+document.addEventListener("keydown", async (e) => {
+  if (S.view !== "audition" || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("input, textarea, select")) return;
+  const c = curCard(), k = e.key.toLowerCase();
+  if (k === "arrowright" || k === "arrowleft") { e.preventDefault(); return go(k === "arrowright" ? 1 : -1, R.on || playing()); }
+  if (k === " ") { e.preventDefault(); const a = (c || liveCards()[0])?.querySelector("audio"); if (!c) go(0, false); if (a) a.paused ? a.play().catch(() => {}) : a.pause(); return; }
+  if ((k === "k" || k === "s") && c) {
+    e.preventDefault();
+    try { await mark(c, k === "k" ? "keep" : "skip", !R.on); if (R.on) go(1, true); } catch (err) { say("export-msg", err.message, "err"); }
+  }
+});
+// ---------- waveforms: each preview decoded once in the page, drawn like the editor's blocks, with a playhead ----------
+const Wave = {
+  peaks: new WeakMap(), ctx: null, seen: null,
+  watch(c) {                                                       // decode when the card comes into view
+    const cv = c.querySelector(".wave canvas");
+    if (!cv || cv.dataset.w) return;
+    cv.dataset.w = "1";
+    Wave.seen = Wave.seen || new IntersectionObserver((es) => es.forEach((x) => { if (x.isIntersecting) { Wave.seen.unobserve(x.target); Wave.load(x.target.closest(".card")); } }));
+    Wave.seen.observe(cv);
+  },
+  async load(c) {
+    const a = c.querySelector("audio"), cv = c.querySelector(".wave canvas");
+    try {
+      Wave.ctx = Wave.ctx || new (window.AudioContext || window.webkitAudioContext)();
+      const buf = await Wave.ctx.decodeAudioData(await (await fetch(a.getAttribute("src"))).arrayBuffer());
+      const n = 600, step = buf.length / n, P = new Float32Array(n), chans = [...Array(buf.numberOfChannels).keys()].map((i) => buf.getChannelData(i));
+      for (const d of chans) for (let i = 0; i < n; i++) { let m = P[i]; for (let j = Math.floor(i * step), e = Math.min(d.length, Math.floor((i + 1) * step)); j < e; j += 8) { const v = Math.abs(d[j]); if (v > m) m = v; } P[i] = m; }
+      const top = Math.max(...P) || 1;
+      Wave.peaks.set(cv, {P: P.map((v) => v / top), dur: buf.duration});
+      Wave.draw(c);
+    } catch (e) { cv.title = "No waveform: " + e.message; }
+  },
+  draw(c) {
+    const a = c.querySelector("audio"), cv = c.querySelector(".wave canvas"), w = Wave.peaks.get(cv);
+    if (!w) return;
+    const r = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight, g = cv.getContext("2d");
+    if (cv.width !== Math.round(W * r)) { cv.width = Math.round(W * r); cv.height = Math.round(H * r); }
+    g.setTransform(r, 0, 0, r, 0, 0); g.clearRect(0, 0, W, H);
+    const f = (a.duration || w.dur) ? a.currentTime / (a.duration || w.dur) : 0;
+    for (let x = 0; x < W; x++) {                                  // one column per pixel, mirrored
+      const i0 = Math.floor(x / W * w.P.length), i1 = Math.max(i0 + 1, Math.floor((x + 1) / W * w.P.length));
+      let m = 0; for (let i = i0; i < i1; i++) if (w.P[i] > m) m = w.P[i];
+      const y = Math.max(0.5, m * (H / 2 - 3));
+      g.fillStyle = x / W < f ? "rgba(255,46,126,.85)" : "rgba(36,17,58,.32)";
+      g.fillRect(x, H / 2 - y, 1, 2 * y);
+    }
+    g.fillStyle = "#24113a"; g.fillRect(Math.round(f * W) - 1, 0, 2, H);   // the playhead
+  },
+  follow(c) {                                                      // redraw the playhead while it plays
+    const a = c.querySelector("audio");
+    const step = () => { Wave.draw(c); if (!a.paused && !a.ended) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  },
+  seek(c, e) {
+    const a = c.querySelector("audio"), cv = c.querySelector(".wave canvas"), w = Wave.peaks.get(cv), box = cv.getBoundingClientRect();
+    const dur = a.duration || (w && w.dur);
+    if (!dur) return a.play().catch(() => {});
+    a.currentTime = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)) * dur;
+    if (a.paused) a.play().catch(() => {}); else Wave.draw(c);
+  },
+};
+$("export").onclick = () => api("/api/export", {run: S.data.name}).then((r) => { say("export-msg", `Job ${r.job} queued: export to the export folder.`, "okc"); poll(); }).catch(fail("export-msg"));
+
+function drawMashups() {
+  const d = S.data, kept = d.pairs.filter((p) => ok(p) && d.marks[p.id] === "keep");
+  fillSelect($("all-tpl"), S.state.templates, null, "club"); $("copy-all").disabled = !S.state.ssd.ok;
+  $("mash-title").textContent = `${d.name} · ${kept.length} kept pair${kept.length === 1 ? "" : "s"}`;
+  const tpls = S.state.templates.map((t) => `<option${t === "club" ? " selected" : ""}>${esc(t)}</option>`).join("");
+  const typed = {};                                              // keep what is typed across a redraw of this run
+  if ($("pairs").dataset.run === d.name) document.querySelectorAll("#pairs .card").forEach((c) => { typed[c.dataset.id] = [[...c.querySelectorAll("[data-f]")].map((x) => x.value), c.querySelector("[data-hq]").checked]; });
+  $("pairs").dataset.run = d.name;
+  const outBpm = (p) => { const b = p.deep.bpm_b || p.inst_bpm; return b < S.state.half_below ? b * 2 : b; };   // as mf mashup doubles it
+  $("pairs").innerHTML = kept.map((p) => `<div class="card" data-id="${p.id}"><div class="t">${esc(p.vocal_label)} <small>vocal</small> · ${esc(p.inst_label)} <small>instrumental</small></div>
+    <div class="m">${pairMeta(p)}</div>
+    <div class="row"><label>Template <select data-f="template">${tpls}</select></label>
+      <label>Variations <input data-f="variations" type="number" min="1" max="8" value="1" style="width:4em"></label>
+      <label>Tempo <input data-f="tempo" type="number" min="60" max="220" step="0.1" placeholder="${outBpm(p).toFixed(1)}" style="width:6em"></label>
+      <label class="any" title="${S.state.hq_missing.length ? "htdemucs_ft is not on this Mac: see README (Better stems)" : "htdemucs_ft for this mashup's stems: better, about 4x slower"}"><input data-hq type="checkbox" ${S.state.hq_missing.length ? "disabled" : ""}> better stems</label>
+      <button data-act="make">Make</button><span class="mut msg"></span></div>
+    ${(d.mashups[p.id] || []).map((m) => mashRow(d.name, m)).join("")}
+  </div>`).join("") || `<p class="mut">Keep a pair under Audition first.</p>`;
+  document.querySelectorAll("#pairs .card").forEach((c) => { const [vals = [], hq = false] = typed[c.dataset.id] || [];
+    vals.forEach((v, i) => { c.querySelectorAll("[data-f]")[i].value = v; }); c.querySelector("[data-hq]").checked = hq && !c.querySelector("[data-hq]").disabled; });
+}
+const stars = (r) => `<span class="stars" role="group" aria-label="Rating">${[1, 2, 3, 4, 5].map((n) =>
+  `<button data-star="${n}" class="${r && n <= r ? "on" : ""}" title="${n} star${n > 1 ? "s" : ""}${r === n ? " (click again to clear)" : ""}" aria-pressed="${r === n}">★</button>`).join("")}</span>`;
+const clipAudio = (run, m) => `<audio class="clip" controls preload="none" src="/m/${enc(run)}/${enc(m.dir)}/clip.mp3?t=${enc(TOKEN)}&v=${Date.now()}"></audio>`;
+function mashRow(run, m) {
+  return `<div class="mash" data-dir="${esc(m.dir)}"><div><b>${esc(m.dir)}</b> <span class="mut">${m.lufs != null ? m.lufs + " LUFS" : ""}</span> ${stars(m.rating)}
+      ${m.has_mix ? `<audio controls preload="none" src="/m/${enc(run)}/${enc(m.dir)}/mashup.mp3?t=${enc(TOKEN)}"></audio>` : `<div class="mut">not rendered</div>`}
+      ${m.has_clip ? `<div class="mut small">30 s clip</div>${clipAudio(run, m)}` : ""}</div>
+      <div class="acts"><button data-act="edit">Edit</button><button data-act="clip" ${m.has_mix ? "" : "disabled"} title="A 30 s clip of its strongest section, from a section start">Clip</button><button data-act="copy" ${S.state && S.state.ssd.ok ? "" : "disabled title='The export folder is not there'"}>Copy to export folder</button>
+      <button data-act="delete" title="Move this mashup to the Trash">Delete</button></div></div>`;
+}
+function drawAll(all) {                                           // every mashup in every run, newest first, one card per pair
+  fillSelect($("f-run"), all.map((m) => m.run).sort(), "all"); fillSelect($("f-tpl"), all.map((m) => m.template).sort(), "all");
+  const q = $("f-text").value.trim().toLowerCase(), run = $("f-run").value, tpl = $("f-tpl").value, notOn = $("f-ssd").checked;
+  const list = all.filter((m) => (!q || `${m.vocal_label} ${m.inst_label}`.toLowerCase().includes(q)) && (!run || m.run === run)
+    && (!tpl || m.template === tpl) && (!notOn || m.on_ssd === false));
+  $("f-ssd").disabled = all.every((m) => m.on_ssd == null); $("f-ssd").closest("label").title = $("f-ssd").disabled ? "Connect the export folder's drive to see what is in it" : "";
+  const cards = [], at = {};
+  for (const m of list) {
+    const key = m.run + "/" + m.pair;
+    if (!(key in at)) { at[key] = cards.length; cards.push({run: m.run, pair: m.pair, v: m.vocal_label, i: m.inst_label, ms: []}); }
+    cards[at[key]].ms.push(m);
+  }
+  $("mash-title").textContent = `All mashups · ${list.length}${list.length < all.length ? " of " + all.length : ""} in ${cards.length} pair${cards.length === 1 ? "" : "s"}`;
+  $("pairs").dataset.run = "*all*";
+  $("pairs").innerHTML = cards.map((c) => `<div class="card" data-run="${esc(c.run)}" data-id="${c.pair}"><div class="t">${esc(c.v)} <small>vocal</small> · ${esc(c.i)} <small>instrumental</small></div>
+    <div class="m mut">run ${esc(c.run)} · pair ${c.pair} <span class="msg"></span></div>
+    ${c.ms.map((m) => mashRow(c.run, m)).join("")}</div>`).join("") || `<p class="mut">No mashups yet: keep a pair under Audition, then Make one here.</p>`;
+}
+["f-text", "f-run", "f-tpl", "f-ssd"].forEach((id) => $(id).addEventListener("input", () => S.allList && drawAll(S.allList)));
+const queued = (r) => `${r.jobs.length ? `${r.jobs.length} job${r.jobs.length === 1 ? "" : "s"} queued.` : "Nothing to queue."}${r.skipped.length ? " Skipped: " + r.skipped.join("; ") : ""}`;
+$("make-all").onclick = () => api("/api/make-all", {run: S.data.name, template: $("all-tpl").value}).then((r) => { say("all-msg", queued(r), "okc"); poll(); }).catch(fail("all-msg"));
+$("copy-all").onclick = () => api("/api/copy-all", {run: S.data.name}).then((r) => { say("all-msg", queued(r), "okc"); poll(); }).catch(fail("all-msg"));
+$("mash-tabs").onclick = (e) => { const b = e.target.closest("button[data-mt]"); if (b && !b.disabled) { S.mashAll = b.dataset.mt === "all"; refresh(); } };
+async function confirmed(path, body, question) {                // 409: the server asks first; the page confirms
+  try { return await api(path, body); }
+  catch (e) { if (e.status !== 409 || !confirm(`${e.message}\n\n${question}`)) throw e; return api(path, {...body, confirm: true}); }
+}
+$("pairs").onclick = async (e) => {
+  const star = e.target.closest("button[data-star]");
+  if (star) {                                                      // rate: the same star again clears it
+    const row = star.closest(".mash"), run = star.closest(".card").dataset.run || S.data.name, n = +star.dataset.star;
+    const now = row.querySelectorAll(".stars .on").length, r = await api("/api/rate", {run, mashup: row.dataset.dir, rating: now === n ? null : n}).catch(showErr);
+    if (r) row.querySelector(".stars").outerHTML = stars(r.rating);
+    return;
+  }
+  const b = e.target.closest("button[data-act]"), c = e.target.closest(".card");
+  if (!b || !c) return;
+  const msg = (t, cls = "mut") => { const s = c.querySelector(".msg"); s.textContent = t; s.className = cls + " msg"; };
+  const run = c.dataset.run || S.data.name, id = +c.dataset.id, dir = (e.target.closest(".mash") || {}).dataset?.dir;
+  try {
+    if (b.dataset.act === "make") {
+      const f = (k) => c.querySelector(`[data-f="${k}"]`).value;
+      const r = await confirmed("/api/mashup", {run, id, template: f("template"), variations: +f("variations") || 1, tempo: f("tempo") ? +f("tempo") : null,
+                                                hq: c.querySelector("[data-hq]").checked}, "Make it again?");
+      msg(`Job ${r.job} queued: the mashup appears here when it is done.`, "okc"); poll();
+    } else if (b.dataset.act === "edit") {
+      S.editing = {run, dir}; $("ed-title").textContent = `Editing ${run} / ${dir}`; $("ed-frame").src = `/m/${enc(run)}/${enc(dir)}/`; show("editor");
+    } else if (b.dataset.act === "copy") {
+      const r = await confirmed("/api/copy", {run, mashup: dir}, "Write over it? Files already there that this copy does not include stay as they are.");
+      msg(`Job ${r.job} queued: copying ${dir} to the export folder.`, "okc"); poll();
+    } else if (b.dataset.act === "clip") {
+      b.disabled = true; msg("Making a 30 s clip…");
+      const row = b.closest(".mash"), r = await api("/api/clip", {run, mashup: dir}).finally(() => { b.disabled = false; });
+      row.querySelector("audio.clip")?.previousElementSibling?.remove(); row.querySelector("audio.clip")?.remove();
+      row.firstElementChild.insertAdjacentHTML("beforeend", `<div class="mut small">30 s clip from ${Math.floor(r.start / 60)}:${String(Math.round(r.start % 60)).padStart(2, "0")}</div>${clipAudio(run, {dir})}`);
+      msg(`Clip ready: ${r.seconds} s from the strongest section.`, "okc");
+    } else if (b.dataset.act === "delete") {
+      await confirmed("/api/delete-mashup", {run, mashup: dir}, "It goes to the Trash; Finder can put it back.");
+      if (S.editing && S.editing.run === run && S.editing.dir === dir) closeEditor();
+      refresh();
+    }
+  } catch (err) { msg(err.message, "err"); }
+};
+$("ed-back").onclick = () => show("mashups");
+function closeEditor() { S.editing = null; $("ed-frame").removeAttribute("src"); $("ed-title").textContent = "Open a mashup from Mashups (Edit)."; }
+
+// ---------- progress strip ----------
+const P = {seen: {}, hidden: null};                               // first time the page saw a job running, if the server gives no start
+const clock = (t) => { t = Math.max(0, Math.round(t)); const m = Math.floor(t / 60); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m}:${String(t % 60).padStart(2, "0")}`; };
+function progress(j) {                                            // {frac 0..1 or null, step}
+  const lines = j.lines.filter((l) => l.trim() && !/^Warning:/.test(l));
+  let k = 0, n = 0, at = -1;
+  lines.forEach((l, i) => { const m = /^\[(\d+)\/(\d+)\]\s*(.*)/.exec(l); if (m) { k = +m[1]; n = +m[2]; at = i; } });
+  const lastLine = (lines[lines.length - 1] || "").trim();
+  if (!n) return {frac: null, step: lastLine.slice(0, 160)};
+  const after = lines.slice(at + 1), finished = after.some((l) => /^\s*(ok|FAIL)\b.* in \d+ s/.test(l));
+  const part = finished ? 1 : Math.min(0.8, 0.15 + 0.3 * after.length);
+  const pair = /^\[\d+\/\d+\]\s*(.*)/.exec(lines[at])[1];
+  return {frac: Math.min(1, (k - 1 + part) / n), step: `pair ${k} of ${n} · ${pair}${after.length && !finished ? " · " + lastLine : ""}`};
+}
+function drawProgress(jobs) {
+  const run = jobs.find((j) => j.state === "running"), waiting = jobs.filter((j) => j.state === "queued");
+  const j = run || jobs.filter((x) => !x.restored).pop(), el = $("prog");
+  if (!j || (!run && P.hidden === j.id)) { el.hidden = true; document.title = "Mashup Studio"; return; }
+  el.hidden = false;
+  const now = j.now ? j.now * 1000 : Date.now();
+  if (run && !P.seen[j.id]) P.seen[j.id] = Date.now();
+  const t0 = j.started ? j.started * 1000 : P.seen[j.id], spent = t0 ? ((j.ended ? j.ended * 1000 : now) - t0) / 1000 : null;
+  const pr = progress(j);
+  el.className = j.state === "running" ? "run" + (pr.frac == null ? " unknown" : "") : j.state;
+  const ch = S.state && S.state.checking;
+  $("p-aud").hidden = !(run && ch && ch.done && !(S.view === "audition" && S.run === ch.run));
+  $("p-cancel").hidden = !run; $("p-cancel").dataset.id = j.id; $("p-hide").hidden = !!run; $("p-hide").dataset.id = j.id;
+  if (run) {
+    const pct = pr.frac == null ? null : Math.round(pr.frac * 100);
+    $("p-title").textContent = "▶ Running: " + j.title + (waiting.length ? ` (+${waiting.length} waiting)` : "");
+    $("p-step").textContent = pr.step || "starting…";
+    const left = pr.frac > 0.04 && spent > 20 ? spent / pr.frac - spent : null;
+    $("p-time").textContent = (spent == null ? "" : clock(spent) + " so far") + (left != null ? ` · about ${left < 90 ? "1 min" : Math.round(left / 60) + " min"} left` : "");
+    $("p-fill").style.width = pct == null ? "100%" : pct + "%"; $("p-pct").textContent = pct == null ? "working…" : pct + "%";
+    document.querySelector(".pbar").setAttribute("aria-valuenow", pct ?? 0);
+    document.title = (pct == null ? "▶ " : `▶ ${pct}% · `) + "Mashup Studio";
+  } else {
+    const word = {done: "✓ Done", failed: "✗ Failed", cancelled: "Cancelled", queued: "Waiting"}[j.state] || j.state;
+    $("p-title").textContent = `${word}: ${j.title}`;
+    $("p-step").textContent = j.state === "failed" ? (pr.step || "see the job log below") : j.state === "done" && /^run brief/.test(j.title) ? "The new run is under Runs." : "";
+    $("p-time").textContent = spent == null ? "" : "took " + clock(spent);
+    $("p-fill").style.width = "100%"; $("p-pct").textContent = word;
+    document.title = (j.state === "done" ? "✓ " : j.state === "failed" ? "✗ " : "") + "Mashup Studio";
+  }
+}
+const underHeader = () => { $("prog").style.top = document.querySelector("header").offsetHeight + "px"; };
+window.addEventListener("resize", underHeader); underHeader();
+$("p-aud").onclick = () => { S.run = S.state.checking.run; S.mashAll = false; show("audition"); };
+$("p-cancel").onclick = () => { if (confirm("Cancel the running job?")) api("/api/cancel", {id: +$("p-cancel").dataset.id}).then(poll); };
+$("p-hide").onclick = () => { P.hidden = +$("p-hide").dataset.id; $("prog").hidden = true; };
+
+// ---------- jobs ----------
+let timer = null;
+async function poll() {
+  clearTimeout(timer);
+  try {
+    S.state = await api("/api/state");
+    const jobs = S.state.jobs, run = jobs.find((j) => j.state === "running"), waiting = jobs.filter((j) => j.state === "queued").length;
+    const last = run || jobs[jobs.length - 1], J = $("job");
+    J.className = run ? "run" : last && last.state === "failed" ? "failed" : "";
+    J.innerHTML = !last ? `<span class="line">No jobs yet.</span>`
+      : `<span class="line">${esc(run ? "▶ " + last.title : last.state + ": " + last.title)}${last.lines.length ? " · " + esc(last.lines[last.lines.length - 1]) : ""}</span>`
+        + (waiting ? `<span>+${waiting} waiting</span>` : "") + (run ? `<button data-cancel="${run.id}">Cancel</button>` : "");
+    drawProgress(jobs);
+    const sig = jobs.filter((j) => j.state !== "queued" && j.state !== "running").map((j) => j.id).join();   // a job finished
+    const busyEar = playing("body");                                // redraw once nothing plays
+    if ($("log-box").open) { if (sig !== S.logSeen) { S.logSeen = sig; drawLog().catch(() => {}); } else tailLog(jobs); }
+    const ch = S.state.checking, live = ch && S.view === "audition" && S.run === ch.run ? `${ch.run}:${ch.done}` : "";
+    if (S.surprise && ch && ch.done && ch.job === S.surprise) { S.surprise = null; S.run = ch.run; S.mashAll = false; show("audition"); }   // Surprise me lands here
+    else if (S.surprise && !jobs.some((j) => j.id === S.surprise && (j.state === "queued" || j.state === "running"))) {
+      const j = jobs.find((x) => x.id === S.surprise);                // over before a poll saw it: say where it went
+      say("surprise-msg", j && j.state === "done" ? "Done: it is the newest run below." : `Surprise me ${j ? j.state : "stopped"}: see the job log.`, j && j.state === "done" ? "okc" : "err");
+      S.surprise = null;
+    }
+    if (!ch) $("aud-checking").hidden = true;                        // the check is over (the redraw may wait)
+    if (live && live !== S.liveSeen) { S.liveSeen = live; refresh(); }   // new pairs: added, nothing playing is touched
+    else if (sig !== S.jobsSeen && !busyEar) { S.jobsSeen = sig; if (S.view !== "briefs" && S.view !== "editor") refresh(); }
+    timer = setTimeout(poll, run || waiting ? 1000 : 4000);
+  } catch (e) { $("job").innerHTML = `<span class="line err">${esc(e.message)}</span>`; timer = setTimeout(poll, 4000); }
+}
+async function drawLog() {                                   // every job, newest first, also from before a restart
+  const was = new Set([...document.querySelectorAll("#log details[open]")].map((d) => +d.dataset.id));
+  const jobs = (await api("/api/jobs")).reverse(), when = (t) => t ? new Date(t * 1000).toLocaleString([], {dateStyle: "short", timeStyle: "short"}) : "";
+  $("log").innerHTML = jobs.map((j, i) => `<details class="job ${esc(j.state)}${j.restored ? " old" : ""}" data-id="${j.id}"${(was.size ? was.has(j.id) : !i) ? " open" : ""}>
+    <summary>${esc(j.state)} · ${esc(j.title)}${j.rc ? ` · exit ${j.rc}` : ""}<span class="mut"> · ${when(j.started)}${j.ended ? " – " + when(j.ended) : ""}</span></summary>
+    <pre>${esc(j.lines.join("\n"))}</pre></details>`).join("") || `<p class="mut">No jobs yet.</p>`;
+}
+function tailLog(jobs) {                                    // the running job's newest lines, in place
+  const run = jobs.find((j) => j.state === "running"), d = run && document.querySelector(`#log details[data-id="${run.id}"] pre`);
+  if (d) d.textContent = run.lines.join("\n"); else if (run) drawLog().catch(() => {});
+}
+$("log-box").ontoggle = () => { if ($("log-box").open) drawLog().catch(() => {}); };
+$("job").onclick = (e) => { const b = e.target.closest("button[data-cancel]"); if (b) api("/api/cancel", {id: +b.dataset.cancel}).then(poll); };
+$("quit").onclick = async () => {
+  if (!confirm(`${unsaved() ? "There are unsaved changes (brief, new brief or editor). " : ""}Stop Mashup Studio? A running job is cancelled.`)) return;
+  await api("/api/quit", {}).catch(() => {});
+  clearTimeout(timer);
+  document.body.innerHTML = `<main><h2>Mashup Studio has stopped.</h2><p class="mut">You can close this tab (and its Terminal window).</p></main>`;
+};
+$("settings").onclick = () => {
+  if (unsaved() && !confirm("There are unsaved changes (brief, new brief or editor). Leave anyway?")) return;
+  S.leaving = true; location.href = "/setup";
+};
+$("restart").onclick = async () => {
+  if (unsaved() && !confirm("There are unsaved changes (brief, new brief or editor). Restart anyway?")) return;
+  try { await api("/api/restart", {}); } catch (e) { showErr(e); return; }
+  clearTimeout(timer); S.leaving = true; $("restarting").hidden = false;
+  history.replaceState(null, "", "#" + S.view + (S.run && !(S.view === "mashups" && S.mashAll) ? "/" + enc(S.run) : ""));
+  const t0 = Date.now(), again = async () => {                   // the new server writes a new token into the page
+    try { const r = await fetch("/", {cache: "no-store"}); if (r.ok && !(await r.text()).includes(TOKEN)) return location.reload(); } catch (e) {}
+    if (Date.now() - t0 > 60000) { $("restarting").textContent = "Mashup Studio did not come back: start it again from its icon."; return; }
+    setTimeout(again, 500);
+  };
+  setTimeout(again, 500);
+};
+async function claudeBadge(recheck) {
+  const el = $("claude");
+  el.className = "badge"; el.textContent = "Claude drafting: checking…";
+  try {
+    const c = await api("/api/claude" + (recheck ? "?recheck=1" : ""));
+    el.className = "badge " + (c.works ? "ok" : "no");
+    el.innerHTML = `Claude drafting: ${c.works ? "works" : "not available"} · ${esc(c.why)} <button id="claude-again">Check again</button>`;
+  } catch (e) { el.className = "badge no"; el.innerHTML = `Claude drafting: could not check (${esc(e.message)}) <button id="claude-again">Check again</button>`; }
+}
+$("claude").onclick = (e) => { if (e.target.id === "claude-again") claudeBadge(true); };
+document.addEventListener("play", (e) => {                     // one preview at a time: a new one stops the rest
+  document.querySelectorAll("audio").forEach((a) => { if (a !== e.target && !a.paused) a.pause(); });
+  const c = e.target.closest?.("#good .card");
+  if (!c) return;
+  R.waiting = false; setCur(c, false); Wave.follow(c);             // the card that plays is the current one
+  api("/api/prepare", {run: S.data.name}).then((r) => { if (r.job) poll(); }).catch(() => {});   // listening: the
+}, true);                                                          // server checks the next pairs ahead if it is idle
+document.querySelectorAll("nav button").forEach((b) => { b.onclick = () => show(b.dataset.view); });
+window.addEventListener("beforeunload", (ev) => { if (!S.leaving && unsaved()) { ev.preventDefault(); ev.returnValue = ""; } });
+const back = /^#(\w+)(?:\/(.+))?$/.exec(location.hash);       // the view before a Restart
+history.replaceState(null, "", location.pathname);
+claudeBadge(false);
+if (back && $("v-" + back[1])) { S.run = back[2] ? decodeURIComponent(back[2]) : null; S.mashAll = !S.run; poll().then(() => show(back[1])); }
+else poll().then(() => api("/api/runs")).then((runs) => show(runs.length ? "runs" : "briefs"), () => show("briefs"));   // your work first
+</script>
+</body>
+</html>

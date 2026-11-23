@@ -1,0 +1,9 @@
+#!/bin/bash
+# Mashup Studio's app, written by packaging/install.sh. If a Studio already answers on its port, it only opens the
+# page. Otherwise it opens "Mashup Studio.command" (beside the settings) in Terminal, which starts `mf app` and
+# opens the browser; Quit in the page, or close that window, to stop it.
+url="http://127.0.0.1:8765/"          # keep in step with `mf app`'s default --port (cli.py) and its Server header (app.py)
+if curl -s -m 2 -I "$url" | grep -qi '^server: mf-app '; then
+  exec open "$url"
+fi
+exec open -a Terminal "$HOME/Library/Application Support/Mashup Studio/Mashup Studio.command"

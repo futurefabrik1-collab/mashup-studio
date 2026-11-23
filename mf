@@ -1,0 +1,7 @@
+#!/bin/sh
+# mf: runs this folder's mashup_finder.cli on the Python that has Mashup Studio's packages: $MF_PYTHON, else the
+# venv packaging/install.sh made. See README.
+here="$(cd "$(dirname "$0")" && pwd)"
+py="${MF_PYTHON:-$HOME/Library/Application Support/Mashup Studio/venv/bin/python}"
+[ -x "$py" ] || { echo "mf: no Python at $py: run packaging/install.sh first (see README)" >&2; exit 1; }
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m mashup_finder.cli "$@"

@@ -1,0 +1,22 @@
+# Short clip, about 1 minute: build with a teaser, one drop with the hook, a fading tail. Keys as in club.toml.
+name = "short"
+
+[[section]]
+name = "build"
+bars = 8
+inst = "build"
+vocal = "hook"
+vocal_bars = 4
+fx = ["lowpass_sweep_up", "drop_cut"]
+
+[[section]]
+name = "drop"
+bars = 16
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "outro"
+bars = 8
+inst = "drop"
+fx = ["fade_out"]

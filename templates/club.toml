@@ -1,0 +1,46 @@
+# Club edit, 160 bars (about 3:40 at 175 BPM, 4:40 at 138): intro, build with a vocal teaser, drop, break, drop, outro.
+# Each [[section]]: bars (multiple of 4); inst = B section type to draw from (intro, build, drop, break,
+# outro, any); inst_stems = B stems that play; vocal = hook, verse, adlib or none; vocal_bars = how many
+# of the section's last bars carry the vocal (default: all); fx from lowpass_sweep_up, highpass_sweep_down,
+# drop_cut, filter_open, fade_in, fade_out.
+name = "club"
+
+[[section]]
+name = "intro"
+bars = 32
+inst = "intro"
+fx = ["filter_open"]
+
+[[section]]
+name = "build"
+bars = 16
+inst = "build"
+vocal = "hook"
+vocal_bars = 8
+fx = ["lowpass_sweep_up", "drop_cut"]
+
+[[section]]
+name = "drop"
+bars = 32
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "break"
+bars = 32
+inst = "break"
+inst_stems = ["other"]
+vocal = "verse"
+fx = ["drop_cut"]
+
+[[section]]
+name = "drop 2"
+bars = 32
+inst = "drop"
+vocal = "hook"
+
+[[section]]
+name = "outro"
+bars = 16
+inst = "outro"
+fx = ["fade_out"]

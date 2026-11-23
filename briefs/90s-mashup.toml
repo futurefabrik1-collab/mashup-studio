@@ -1,0 +1,20 @@
+# Brief, as written:
+#   Find bass house and other bass heavy music and match with 80's and 90' pop and electronic hits.
+name = "90s-mashup"
+
+[inst]                          # the bass track carrying the vocal
+# No tempo filter: bass house sits around 124-130, bassline / garage 130-140, dubstep 140.
+include = ["bass house", "bassline", "uk bass", "garage", "speed garage", "dubstep",
+           "electro house", "future house"]          # whole words in genre, title, album or folder
+exclude = ["acapella", "karaoke"]
+
+[vocal]                         # the record giving the top line
+years = [1978, 2002]            # 80s and 90s; "pop / electronic hit" has no tag in the catalog, so by year only
+exclude = ["instrumental", "karaoke"]
+
+[match]
+max_stretch = 12
+per_vocal = 5
+per_inst = 10
+limit = 30
+top = 60
