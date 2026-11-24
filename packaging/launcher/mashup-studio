@@ -1,9 +1,11 @@
 #!/bin/bash
-# Mashup Studio's app, written by packaging/install.sh. If a Studio already answers on its port, it only opens the
-# page. Otherwise it opens "Mashup Studio.command" (beside the settings) in Terminal, which starts `mf app` and
+# Mashup Studio's app, written by packaging/install.sh. If a Studio already answers on its port, it asks it to open
+# its page. Otherwise it opens "Mashup Studio.command" (beside the settings) in Terminal, which starts `mf app` and
 # opens the browser; Quit in the page, or close that window, to stop it.
 url="http://127.0.0.1:8765/"          # keep in step with `mf app`'s default --port (cli.py) and its Server header (app.py)
 if curl -s -m 2 -I "$url" | grep -qi '^server: mf-app '; then
-  exec open "$url"
+  # Only the Studio knows its page's key, so it opens its page (app.py, OPEN_PAGE). Never open the address here:
+  # whatever holds the port could be another user's server. If it does not, the Terminal window's `mf app` says why.
+  curl -sf -o /dev/null -m 3 -X POST -H 'X-Open-Page: 1' "${url}api/open-page" && exit 0
 fi
 exec open -a Terminal "$HOME/Library/Application Support/Mashup Studio/Mashup Studio.command"

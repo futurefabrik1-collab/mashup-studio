@@ -4,7 +4,7 @@ import csv, glob, html, json, os, re, tempfile
 
 from . import arrange, config, deep, render, trackmap
 
-RUNS = os.path.join(config.DATA, "runs")
+RUNS = config.RUNS
 
 
 def make(sa, ba, sb, bb, shift, out_dir_for, template="club", n=1, seed=1, out_bpm=None, pair=None, log=print,

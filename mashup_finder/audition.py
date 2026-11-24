@@ -44,14 +44,19 @@ Keys: <kbd>j</kbd>/<kbd>k</kbd> next/prev, <kbd>space</kbd> play, <kbd>y</kbd> k
 <div id="list">__CARDS__</div></main>
 <script>
 "use strict";
-// Served by `mf app` (SERVED, the token filled in), marks are the run's picks.json; opened as a file, they live in
-// this browser.
+// Served by `mf app` (SERVED, with the key the Studio's tab keeps), marks are the run's picks.json; opened as a
+// file, they live in this browser.
 const TOKEN = "__TOKEN__", RUN = __RUN__, SERVED = __SERVED__;
 const KEY = "mf-picks-" + RUN, H = {"X-Token": TOKEN};
 const cards = [...document.querySelectorAll(".card")].filter((c) => !c.closest(".rej"));
 let picks = {}, cur = 0;
 const say = (t, err) => { const m = document.getElementById("msg"); m.textContent = t; m.className = err ? "err" : "m"; };
-const answer = async (r) => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
+const answer = async (r) => {
+  const j = await r.json().catch(() => ({})), k = r.ok ? "" : mfKey.get();       // a newer key: Restart (edit.NO_TOKEN)
+  if (r.status === 403 && j.token === false && k && k !== TOKEN) location.reload();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+};
 const store = SERVED ? {                           // load() -> marks; save(id, mark or null) -> marks
   load: () => fetch("/api/run?name=" + encodeURIComponent(RUN), {headers: H}).then(answer).then((j) => j.marks),
   save: (id, m) => fetch("/api/mark", {method: "POST", headers: {...H, "Content-Type": "application/json"},
@@ -105,7 +110,7 @@ if (SERVED) {                                      // previews need the token; E
   document.querySelectorAll("audio").forEach((a) => { a.src = a.getAttribute("src") + "?t=" + encodeURIComponent(TOKEN); });
 }
 store.load().then((p) => { picks = p; if (SERVED) say("Marks are the run's own (picks.json), the same as in Mashup Studio."); paint(); },
-                  (e) => say(e.message + (SERVED ? ": reload the page" : ""), true));
+                  (e) => say(e.message, true));
 </script></body></html>"""
 
 

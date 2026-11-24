@@ -1,5 +1,5 @@
 """The editor's server (mf edit): API, safety and the arrangement it writes."""
-import http.client, io, json, os, threading, unittest
+import http.client, io, json, os, threading, time, unittest
 from unittest import mock
 
 import numpy as np
@@ -52,7 +52,6 @@ class EditServerTest(unittest.TestCase):
     def test_page_and_load(self):
         code, body, hdr = self.req("GET", "/", token=False)
         self.assertEqual(code, 200)
-        self.assertIn(self.token.encode(), body)
         self.assertIn("frame-ancestors 'none'", hdr["Content-Security-Policy"])
         code, body, _ = self.req("GET", "/api/arrangement")
         self.assertEqual(code, 200)
@@ -62,8 +61,53 @@ class EditServerTest(unittest.TestCase):
         self.assertEqual((j["lanes"], j["sr"], j["source_of"]["vocal"]["A"]), (["vocal", "drums", "bass", "other"], fx.SR, "A-vocals"))
         self.assertEqual(self.req("GET", "/favicon.ico", token=False)[0], 204)
 
+    def test_the_page_never_carries_the_token_its_address_does(self):
+        for headers in ({}, {"X-Token": self.token}):                   # whoever asks
+            code, body, hdr = self.req("GET", f"/?t={self.token}", token=False, headers=headers)
+            self.assertEqual(code, 200)
+            self.assertNotIn(self.token.encode(), body)
+            self.assertIn(edit.key_js(edit.Handler.key_check).encode(), body)   # it reads the key the address brings
+        self.assertEqual(edit.keyed_url(self.srv), f"http://127.0.0.1:{self.port}/#key={self.token}")   # never sent
+
+    def test_the_browser_opens_the_keyed_address_and_no_browser_prints_it(self):
+        for page, opened, shown in (("open", True, False), ("print", False, True), ("reconnects", False, False)):
+            srv, logs = edit.make_server(self.dir), []
+            with mock.patch.object(edit.webbrowser, "open") as browser, mock.patch.object(srv, "serve_forever"):
+                edit.run(srv, "editing", page, logs.append)
+            self.assertEqual(browser.call_args_list, [mock.call(edit.keyed_url(srv))] if opened else [])
+            self.assertEqual(srv.token in logs[0], shown, logs)
+            self.assertIn(f"http://127.0.0.1:{srv.server_address[1]}/", logs[0])
+
+    def test_open_page_opens_once_per_two_seconds_and_a_failed_open_frees_it(self):
+        srv = edit.make_server(self.dir)
+        srv.opening = threading.Lock()                                   # app.make_server makes it for the Studio
+        self.addCleanup(srv.server_close)
+        with mock.patch.object(edit.webbrowser, "open") as browser:
+            asks = [threading.Thread(target=edit.open_page, args=(srv,)) for _ in range(20)]   # any local user may ask
+            for t in asks:
+                t.start()
+            for t in asks:
+                t.join()
+            for _ in range(50):
+                if browser.called:
+                    break
+                time.sleep(0.02)
+        browser.assert_called_once_with(edit.keyed_url(srv))
+        self.assertTrue(srv.opening.locked())                            # the next ask waits 2 s
+        srv.opening = threading.Lock()
+        with mock.patch.object(edit.webbrowser, "open", side_effect=OSError("no browser")):
+            edit.open_page(srv)
+            for _ in range(50):
+                if not srv.opening.locked():
+                    break
+                time.sleep(0.02)
+        self.assertFalse(srv.opening.locked())                           # a failed open does not lock asks out
+
     def test_token_and_host_are_required(self):
-        self.assertEqual(self.req("GET", "/api/arrangement", token=False)[0], 403)
+        code, body, _ = self.req("GET", "/api/arrangement", token=False)
+        self.assertEqual(code, 403)
+        self.assertIn("open Mashup Studio again", json.loads(body)["error"])   # every page shows how to get the key
+        self.assertIs(json.loads(body)["token"], False)                  # and can tell this refusal from others
         self.assertEqual(self.req("GET", "/api/arrangement", headers={"X-Token": "x" * 32}, token=False)[0], 403)
         self.assertEqual(self.req("GET", "/", token=False, host=f"evil.example:{self.port}")[0], 403)   # DNS rebinding
         self.assertEqual(self.req("POST", "/api/save", {"lanes": {}}, token=False)[0], 403)

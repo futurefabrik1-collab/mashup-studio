@@ -1,11 +1,13 @@
 """`mf edit <mashup dir>`: the block editor. A stdlib HTTP server on 127.0.0.1 serves editor.html and a small
 API over the folder's arrangement.json, blocks/, mashup.mp3 and clip.mp3.
 
-Safety: it listens on 127.0.0.1 only. Every API call needs the session token that is written into the page,
-and the Host header must be this server, so another web page open in the browser (or a DNS-rebinding site)
-cannot save or render. Only the lanes of an arrangement can be changed: sources, tempo and the rest stay as
-on disk, so a posted arrangement cannot point the server at other files."""
-import datetime, http.server, io, json, os, secrets, shutil, threading, webbrowser
+Safety: it listens on 127.0.0.1 only. Every API call needs the page's session token, and the Host header must be
+this server, so another web page open in the browser (or a DNS-rebinding site) cannot save or render. The page
+itself never holds the token: the address the server opens brings it (keyed_url's #key=, which no server sees), and
+the page keeps it in its own port's storage, so another user on the same Mac cannot read it from the page. Only the
+lanes of an arrangement can be changed: sources, tempo and the rest stay as on disk, so a posted arrangement cannot
+point the server at other files."""
+import datetime, http.client, http.server, io, json, os, secrets, shutil, threading, time, webbrowser
 from urllib.parse import parse_qs, unquote, urlparse
 
 import soundfile as sf
@@ -15,6 +17,26 @@ from . import arrange, render
 HOST = "127.0.0.1"
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "editor.html")
 MAX_POST = 8 * 1024 * 1024
+# What a page's `"__TOKEN__"` becomes (key_js: __CHECK__ is a route that answers only to the token): the key
+# from the address (keyed_url), taken out of the address and kept in this port's localStorage once the server accepts
+# it, so a junk #key= never replaces a good one; else the stored key (a reload, another tab, the editor's frame). It
+# also sets window.mfKey, through which app.html and setup.html store the next key on Restart, and reloads the page
+# when a #key= is pasted into a tab already on it (a fragment change alone loads nothing).
+KEY_JS = ('(() => { const get = () => { try { return localStorage.getItem("mf-key") || ""; } catch (e) { return ""; } }, '
+          'set = (k) => { try { localStorage.setItem("mf-key", k); } catch (e) {} }; window.mfKey = {get, set}; '
+          'addEventListener("hashchange", () => { if (location.hash.startsWith("#key=")) location.reload(); }); '
+          'const m = /^#key=([\\w-]+)$/.exec(location.hash); if (!m) return get(); '
+          'history.replaceState(null, "", location.pathname + location.search); '
+          'fetch("__CHECK__", {headers: {"X-Token": m[1]}}).then((r) => { if (r.ok) set(m[1]); }, () => {}); '
+          'return m[1]; })()')
+# token: False lets a page tell this refusal from others (app.html and audition.py reload on it after a Restart).
+NO_TOKEN = {"error": "missing or wrong session token: open Mashup Studio again from its icon (or run the mf command "
+                     "again), which opens the page with its key", "token": False}
+
+
+def key_js(check):
+    """KEY_JS for a server whose route `check` answers only to the token (Handler.key_check)."""
+    return KEY_JS.replace("__CHECK__", check)
 
 
 def backup(path, ext=None):
@@ -69,6 +91,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     under its own prefix: editor.html uses relative URLs, so the same page works at / and at /m/<run>/<mashup>/."""
     server_version = "mf-edit"
     frame_ancestors = "'none'"                                   # the app shows the editor in a frame: 'self' there
+    key_check = "api/arrangement"                                # KEY_JS: a route that needs the token
 
     def log_message(self, fmt, *args):                          # quiet; errors reach the page instead
         pass
@@ -80,7 +103,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _token_ok(self, url, query_ok=False):
         """The X-Token header; `?t=` only where the page cannot set a header (an <audio> element)."""
         t = self.headers.get("X-Token") or (parse_qs(url.query).get("t", [""])[0] if query_ok else "")
-        return secrets.compare_digest(t, self.server.token)
+        return secrets.compare_digest(t.encode(), self.server.token.encode())   # bytes: any header text compares
 
     def _send(self, code, body, ctype="application/json", extra=()):
         if isinstance(body, (dict, list)):
@@ -117,8 +140,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._html(f.read())
 
     def _html(self, page):
-        """An HTML page with the session token written in. No other site may frame it."""
-        page = page.replace("__TOKEN__", self.server.token)
+        """An HTML page that reads the token from its address or storage (KEY_JS). No other site may frame it."""
+        page = page.replace('"__TOKEN__"', key_js(self.key_check))
         return self._send(200, page.encode(), "text/html; charset=utf-8",
                           [("Content-Security-Policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
                             f"media-src 'self' blob:; connect-src 'self'; frame-ancestors {self.frame_ancestors}")])
@@ -128,7 +151,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._send(403, {"error": "wrong host"})
         if not self._token_ok(url):
-            return self._send(403, {"error": "missing or wrong session token"})
+            return self._send(403, NO_TOKEN)
         n = self.headers.get("Content-Length") or "0"
         n = int(n) if n.isdigit() else -1
         if not 0 <= n <= MAX_POST:
@@ -144,7 +167,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/":
             return self._page(PAGE)
         if not self._token_ok(url, query_ok=path in ("/mashup.mp3", "/clip.mp3")):
-            return self._send(403, {"error": "missing or wrong session token"})
+            return self._send(403, NO_TOKEN)
         try:
             if path == "/api/arrangement":
                 return self._send(200, {"arrangement": ed.load(), "folder": os.path.basename(ed.dir),
@@ -206,22 +229,72 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.route_post(unquote(url.path), url, body)
 
 
-def bind(handler, port=0, host=HOST):
-    """A server for handler, not yet serving, with a fresh session token. Only 127.0.0.1: there is no way to
-    listen anywhere else."""
+def bind(handler, port=0, host=HOST, token=None):
+    """A server for handler, not yet serving, with this session token (else a fresh one). Only 127.0.0.1: there is
+    no way to listen anywhere else."""
     if host != HOST:
         raise ValueError(f"only {HOST}, not {host!r}")
     srv = http.server.ThreadingHTTPServer((HOST, port), handler)
-    srv.daemon_threads, srv.token = True, secrets.token_urlsafe(24)
+    srv.daemon_threads, srv.token = True, token or secrets.token_urlsafe(24)
     return srv
 
 
-def run(srv, what, open_browser=True, log=print, stop=lambda: None):
-    """Serve until Ctrl-C (or a shutdown from the page), then stop() and close."""
-    url = f"http://{HOST}:{srv.server_address[1]}/"
+def keyed_url(srv):
+    """The page's address with its key, in the fragment, which the browser never sends to a server (KEY_JS)."""
+    return f"http://{HOST}:{srv.server_address[1]}/#key={srv.token}"
+
+
+def open_page(srv):
+    """Opens srv's keyed address in the browser, in the background and at most once per 2 s (srv.opening, a Lock): in
+    the Studio any local user can ask for it (app.Handler.do_POST)."""
+    def go():
+        try:
+            webbrowser.open(keyed_url(srv))
+            time.sleep(2)
+        finally:
+            srv.opening.release()
+    if srv.opening.acquire(blocking=False):
+        threading.Thread(target=go, daemon=True).start()
+
+
+def ask(port, method, path, headers=None):
+    """(status, Server header) of 127.0.0.1:port's answer to one request, or None when nothing (or no web server)
+    answers there."""
+    c = http.client.HTTPConnection(HOST, port, timeout=3)
+    try:
+        c.request(method, path, headers={"Host": f"{HOST}:{port}", **(headers or {})})
+        r = c.getresponse()
+        return r.status, r.getheader("Server", "")
+    except (OSError, http.client.HTTPException):
+        return None
+    finally:
+        c.close()
+
+
+def pass_on(token):
+    """An inheritable pipe holding token, for the program this process execs next: its descriptor, as text. Not the
+    environment or the arguments: other users on the Mac can read those (ps -E)."""
+    r, w = os.pipe()
+    os.write(w, token.encode())
+    os.close(w)
+    os.set_inheritable(r, True)
+    return str(r)
+
+
+def take_over(fd):
+    """The token pass_on put in descriptor fd (text)."""
+    with os.fdopen(int(fd)) as f:
+        return f.read()
+
+
+def run(srv, what, page="open", log=print, stop=lambda: None):
+    """Serve until Ctrl-C (or a shutdown from the page), then stop() and close. page: "open" opens it in the browser;
+    "print" prints its keyed address instead, the only way in; "reconnects" (after a Restart the open page does):
+    neither."""
+    url = keyed_url(srv) if page == "print" else f"http://{HOST}:{srv.server_address[1]}/"
     log(f"{what}\n  {url}  (Ctrl-C to stop)")
-    if open_browser:
-        webbrowser.open(url)
+    if page == "open":
+        webbrowser.open(keyed_url(srv))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -241,4 +314,4 @@ def make_server(folder, port=0, host=HOST):
 
 def serve(folder, port=0, open_browser=True, log=print):
     srv = make_server(folder, port)
-    run(srv, f"editing {srv.editor.dir}", open_browser, log)
+    run(srv, f"editing {srv.editor.dir}", "open" if open_browser else "print", log)

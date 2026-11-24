@@ -45,7 +45,7 @@ class SetupTest(unittest.TestCase):
         code, page = self.call("GET", "/", raw=True)
         self.assertEqual(code, 200)
         self.assertIn("Where is your music?", page)
-        self.assertIn(self.srv.token, page)
+        self.assertNotIn(self.srv.token, page)                           # the page reads it from its address
         self.assertNotIn("/* studio.css */", page)
         self.assertNotIn('data-view="briefs"', page)
         code, s = self.call("GET", "/api/setup")

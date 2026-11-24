@@ -3,12 +3,12 @@
 Everything lives in a temp folder removed at exit: a brief, one run made by tests/fake_mf.py (the real CLI with the
 audio work faked), its first pair kept with a short mashup made, tests/fixtures' small catalog, and stand-ins for the
 SSD, the Trash, the drafter and the Claude check. Nothing outside the temp folder is read or written, the real claude
-CLI is never run. Prints `ready <url> <run> <mashup>` once it serves."""
+CLI is never run. Prints `ready <url> <run> <mashup>` once it serves; the url carries the page's key."""
 import os, sys, tempfile, threading
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tests import fixtures as fx                                          # noqa: E402  (first: no user settings)
-from mashup_finder import app, catalog, draft                            # noqa: E402
+from mashup_finder import app, catalog, draft, edit                           # noqa: E402
 
 FAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_mf.py")
 
@@ -31,7 +31,7 @@ def main(port):
     assert a.jobs.wait(a.make_mashup(run, 0, "short", 1, None), 300) == "done"
     mashup = a.mashups(os.path.join(a.runs, run))[0]["dir"]
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    print(f"ready http://127.0.0.1:{srv.server_address[1]}/ {run} {mashup}", flush=True)
+    print(f"ready {edit.keyed_url(srv)} {run} {mashup}", flush=True)
     try:
         threading.Event().wait()
     except KeyboardInterrupt:

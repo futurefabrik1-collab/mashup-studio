@@ -7,11 +7,12 @@ at a time from a queue, the last output line shown as progress. Cancel is Ctrl-C
 server never waits on a job, so the page stays responsive while Demucs runs. Finished jobs are kept in
 runs/jobs.json, so the job log survives a restart.
 
-One Studio at a time: `mf app` listens on a fixed port (cli: 8765), and a second start opens the browser on the
-one already running. Restart (from the page) re-executes the same command in the same process."""
-import collections, contextlib, errno, glob, http.client, itertools, json, os, random, re, shutil, signal, subprocess, sys, \
+One Studio at a time: `mf app` listens on a fixed port (cli: 8765), and a second start asks the one already running
+to open its page: only it knows the key, and nothing opens an address it has not checked, as another user's program
+could hold the port. Restart (from the page) re-executes the same command in the same process."""
+import collections, contextlib, errno, glob, itertools, json, os, random, re, secrets, shutil, signal, subprocess, sys, \
     threading, time, tomllib, webbrowser
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 
@@ -25,7 +26,8 @@ MF = [sys.executable, "-u", "-m", "mashup_finder.cli"]          # unbuffered, so
 COPY = ("mashup.wav", "arrangement.json", "ableton")   # what Copy to SSD takes from a mashup folder: no mp3 on the SSD
 SSD_COPY = [sys.executable, "-u", os.path.join(HERE, "ssd_copy.py")]
 TRASH = "/usr/bin/trash"                                        # macOS's own: Finder can put the folder back
-RESTARTED = "MF_APP_RESTARTED"                                  # set across Restart's exec: no second browser tab
+TOKEN_FD = "MF_APP_TOKEN_FD"           # set across Restart's exec: the pipe with the next token (edit.pass_on)
+OPEN_PAGE = "/api/open-page"           # a second start asks the running Studio to open its page (Handler.do_POST)
 # Run as a job's first command when the page has not confirmed: the target may have appeared while the job waited.
 STILL_FREE = ["/bin/sh", "-c", 'if [ -e "$1" ]; then echo "$1 appeared meanwhile: copy again to write over it"; exit 1; fi', "sh"]
 PREPARE = 3                                                     # pairs Prepare checks ahead
@@ -822,8 +824,11 @@ class App:
 
 class Handler(edit.Handler):
     server_version = "mf-app"
+    # Server: "mf-app <the Mac app's build>" when that app started the Studio (its launcher compares them), else Python's.
+    sys_version = os.environ.get("MASHUP_STUDIO_BUILD") or edit.Handler.sys_version
     shutdown_after_reply = False                                 # set by Quit and Restart
     frame_ancestors = "'self'"                                   # the Editor tab frames /m/<run>/<mashup>/
+    key_check = "/api/state"                                     # edit.KEY_JS: a route that needs the token
 
     @property
     def app(self):
@@ -869,7 +874,7 @@ class Handler(edit.Handler):
             except Refused as e:
                 return self._send(e.status, {"error": str(e)})
         if not self._token_ok(url, query_ok=path.startswith("/r/")):
-            return self._send(403, {"error": "missing or wrong session token"})
+            return self._send(403, edit.NO_TOKEN)
         if path.startswith("/r/"):                               # /r/<run>/previews/<file>: an audition preview
             try:
                 if len(parts) != 5 or parts[3] != "previews":
@@ -928,44 +933,48 @@ class Handler(edit.Handler):
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
         self._send(404, {"error": "not found"})
 
+    def do_POST(self):
+        # A second start (`mf app`, the Mac app, packaging/launcher) cannot know the key, so it asks the Studio to open
+        # its page in the browser of whoever started it: answered at once, and one open per 2 s, as any local user can
+        # ask. Another site cannot: the header needs a CORS preflight, which this server never grants.
+        if urlparse(self.path).path == OPEN_PAGE and self.headers.get("X-Open-Page") and self._host_ok():
+            edit.open_page(self.server)
+            return self._send(200, {"ok": True})
+        super().do_POST()
+
     def _quit(self):
         self.app.jobs.stop_all()
         self.shutdown_after_reply = True
         return {"ok": True}
 
     def _restart(self):
-        """Stop and start again: serve() re-executes the process (App.close says when not)."""
+        """Stop and start again: serve() re-executes the process with the next token, which this reply hands the
+        page, so it reconnects (App.close says when not)."""
         self.app.close()
         self.server.restart = self.shutdown_after_reply = True
-        return {"ok": True}
+        return {"ok": True, "key": self.server.next_token}
 
 
-def make_server(port=0, host=edit.HOST, **app_args):
+def make_server(port=0, host=edit.HOST, token=None, **app_args):
     """The app's server, not yet serving; app_args go to App (root, ssd, mf, drafter, trash, claude_check)."""
-    srv = edit.bind(Handler, port, host)
-    srv.app, srv.restart = App(**app_args), False
+    srv = edit.bind(Handler, port, host, token)
+    srv.app, srv.restart, srv.next_token = App(**app_args), False, secrets.token_urlsafe(24)
+    srv.opening = threading.Lock()                               # edit.open_page
     return srv
 
 
 def studio_at(port):
     """Whether a Mashup Studio answers on 127.0.0.1:port."""
-    c = http.client.HTTPConnection(edit.HOST, port, timeout=3)
-    try:
-        c.request("HEAD", "/", headers={"Host": f"{edit.HOST}:{port}"})
-        return c.getresponse().getheader("Server", "").startswith(Handler.server_version + " ")
-    except (OSError, http.client.HTTPException):                 # nothing there, or not a web server
-        return False
-    finally:
-        c.close()
+    r = edit.ask(port, "HEAD", "/")
+    return r is not None and r[1].startswith(Handler.server_version + " ")
 
 
 def serve(port=0, open_browser=True, log=print, **app_args):
     """Serve until Quit; Restart runs the same command again in this process. If a Studio already has the port,
     open the browser on it instead and return."""
-    if os.environ.pop(RESTARTED, None):                          # the page is open and reconnects by itself
-        open_browser = False
+    fd = os.environ.pop(TOKEN_FD, None)                         # after a Restart: the token the open page has
     try:
-        srv = make_server(port, **app_args)
+        srv = make_server(port, token=fd and edit.take_over(fd), **app_args)
     except OSError as e:
         if e.errno != errno.EADDRINUSE:
             raise
@@ -973,11 +982,14 @@ def serve(port=0, open_browser=True, log=print, **app_args):
             raise SystemExit(f"{edit.HOST}:{port} is in use by another program: start with --port <another port>")
         url = f"http://{edit.HOST}:{port}/"
         log(f"Mashup Studio is already running: {url}")
-        if open_browser:
-            webbrowser.open(url)
+        # Only the Studio opens its page (it alone knows the key), never this process: whatever holds the port could be
+        # another user's server, and a Studio from before page keys refuses.
+        if open_browser and (r := edit.ask(port, "POST", OPEN_PAGE, {"X-Open-Page": "1"})) and r[0] != 200:
+            log(f"It did not open its page. `lsof -nP -iTCP:{port} -sTCP:LISTEN` shows whose it is; if yours, Quit it")
         return
-    edit.run(srv, "Mashup Studio (Quit in the page)", open_browser, log, srv.app.jobs.stop_all)
+    edit.run(srv, "Mashup Studio (Quit in the page)", "reconnects" if fd else "open" if open_browser else "print", log,
+             srv.app.jobs.stop_all)
     if srv.restart:
         log("Restarting Mashup Studio")
         sys.stdout.flush()
-        os.execve(sys.executable, sys.orig_argv, {**os.environ, RESTARTED: "1"})
+        os.execve(sys.executable, sys.orig_argv, {**os.environ, TOKEN_FD: edit.pass_on(srv.next_token)})

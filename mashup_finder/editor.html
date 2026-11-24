@@ -136,7 +136,7 @@ const say = (msg, cls = "") => { const s = $("status"); s.textContent = msg; s.c
 function draw() {
   const W = Math.ceil(nBars() + 8) * ppb;
   $("tl").style.width = W + "px";
-  $("secs").innerHTML = arr.sections.map((s) => `<div class="sec" style="left:${s.out_bar * ppb}px;width:${s.bars * ppb}px" title="${esc(s.name)}: bars ${s.out_bar + 1}–${s.out_bar + s.bars}">${esc(s.name)}</div>`).join("");
+  $("secs").innerHTML = arr.sections.map((s) => `<div class="sec" style="left:${s.out_bar * ppb}px;width:${s.bars * ppb}px" title="${esc(s.name)}: bars ${+s.out_bar + 1}–${+s.out_bar + +s.bars}">${esc(s.name)}</div>`).join("");
   const step = ppb >= 24 ? 4 : ppb >= 12 ? 8 : 16;
   let r = "";
   for (let b = 0; b < W / ppb; b += step) r += `<div class="tick" style="left:${b * ppb}px">${b + 1}</div>`;
@@ -169,7 +169,7 @@ function blockEl(b) {
   const span = b.bars / k(b);
   e.innerHTML = `<div class="h l"></div><div class="h r"></div><div class="fh in" title="Fade in: drag left to swell in before the block"></div>` +
     `<div class="fh out" title="Fade out: drag left to fade over the block's last bars"></div><div class="fo" style="width:${(b.fade_out || 0) * ppb}px"></div>` +
-    `<span class="lbl">${b.src} ${fmt(b.src_bar + 1)}–${fmt(b.src_bar + span)}` +
+    `<span class="lbl">${esc(b.src)} ${fmt(b.src_bar + 1)}–${fmt(b.src_bar + span)}` +
     `<small>${fmt(b.bars)} bar${b.bars === 1 ? "" : "s"}${b.gain_db ? " · " + (b.gain_db > 0 ? "+" : "") + b.gain_db.toFixed(1) + " dB" : ""}</small></span>`;
   waveform(e, b);
   e.title = `${b.lane}: output bars ${fmt(b.out_bar + 1)}–${fmt(b.out_bar + b.bars)}, from ${b.src} bar ${fmt(b.src_bar + 1)}`;
@@ -248,8 +248,8 @@ function drawLoop() {
 function inspect() {
   const I = $("insp");
   if (!sel) { I.innerHTML = "Click a block to select it."; return; }
-  const g = sel.gain_db || 0;                                      // vocal blocks are often +10 to +20 dB
-  I.innerHTML = `<span><b>${sel.lane}</b> block, output bars ${fmt(sel.out_bar + 1)}–${fmt(sel.out_bar + sel.bars)}, from ${sel.src} bar ${fmt(sel.src_bar + 1)}</span>` +
+  const g = +sel.gain_db || 0;                                     // vocal blocks are often +10 to +20 dB
+  I.innerHTML = `<span><b>${esc(sel.lane)}</b> block, output bars ${fmt(sel.out_bar + 1)}–${fmt(sel.out_bar + sel.bars)}, from ${esc(sel.src)} bar ${fmt(sel.src_bar + 1)}</span>` +
     `<label>Gain <input id="gain" type="range" min="${Math.floor(g) - 24}" max="${Math.ceil(g) + 12}" step="0.25" value="${g}"> <b id="gv">${g.toFixed(1)} dB</b></label>` +
     `<button id="del">Delete</button>`;
   $("gain").oninput = (e) => { $("gv").textContent = (+e.target.value).toFixed(1) + " dB"; };
@@ -525,7 +525,7 @@ window.mf = {
 };
 
 api("api/arrangement").then(async (j) => {
-  arr = j.arrangement; LANES = j.lanes; SR = j.sr; SOURCE_OF = j.source_of;
+  arr = j.arrangement; LANES = j.lanes.filter((l) => /^\w+$/.test(l)); SR = j.sr; SOURCE_OF = j.source_of;   // names: class, data and selector
   $("title").textContent = j.folder; document.title = j.folder + " · mashup editor";
   for (const l of LANES) arr.lanes[l] = (arr.lanes[l] || []).map((b) => ({fx: [], gain_db: 0, ...b, lane: l}));
   draw(); loadMix(j.has_mix);

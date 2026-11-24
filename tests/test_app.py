@@ -1,17 +1,28 @@
 """`mf app` (app.py): the job queue, the server's routes and safety, picks.json, export and Copy to SSD.
 Jobs run tests/fake_mf.py (the real CLI with the audio work faked) on a temp root; a temp folder stands in for the
 SSD, so nothing under runs/, _cache/ or /Volumes is touched."""
-import http.client, json, os, re, shutil, socket, subprocess, sys, threading, time, unittest
+import http.client, http.server, json, os, re, shutil, socket, subprocess, sys, threading, time, unittest
 from unittest import mock
 from urllib.parse import quote
 
-from mashup_finder import app, audition, catalog, cli, engine, render, ssd_copy
+from mashup_finder import app, audition, catalog, cli, edit, engine, render, ssd_copy
 from tests import fixtures as fx
 
 FAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_mf.py")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY = [sys.executable, "-c"]
 BRIEF = 'name = "demo"\n\n[inst]\ntempo = [126]\n\n[match]\ntop = 2\n'
+
+
+def request(port, method, path, body=None, headers=None, timeout=60):
+    """(status, body, response) of one request to 127.0.0.1:port, with its Host header."""
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    try:
+        c.request(method, path, body=body, headers={"Host": f"127.0.0.1:{port}", **(headers or {})})
+        r = c.getresponse()
+        return r.status, r.read(), r
+    finally:
+        c.close()
 
 
 class JobsTest(unittest.TestCase):
@@ -210,22 +221,18 @@ class AppServerTest(unittest.TestCase):
 
     @classmethod
     def call(cls, method, path, body=None, token=True, host=None, raw=False):
-        c = http.client.HTTPConnection("127.0.0.1", cls.port, timeout=60)
-        h = {"Host": host or f"127.0.0.1:{cls.port}"}
-        if token:
-            h["X-Token"] = cls.token
-        data = None if body is None else json.dumps(body).encode()
-        c.request(method, path, body=data, headers=h)
-        r = c.getresponse()
-        out = r.read()
-        c.close()
-        return (r.status, out) if raw else (r.status, json.loads(out or b"null"))
+        h = {"X-Token": cls.token} if token else {}
+        if host:
+            h["Host"] = host
+        code, out, _ = request(cls.port, method, path, None if body is None else json.dumps(body).encode(), h)
+        return (code, out) if raw else (code, json.loads(out or b"null"))
 
     def test_page_host_and_token(self):
-        code, page = self.call("GET", "/", token=False, raw=True)
+        code, page = self.call("GET", "/", raw=True)
         self.assertEqual(code, 200)
-        self.assertIn(self.token.encode(), page)
-        self.assertIn(b"[hidden]{display:none!important}", page)        # studio.css, written into the page
+        self.assertNotIn(self.token.encode(), page)                     # the page gets it from its address (edit.KEY_JS)
+        self.assertIn(edit.key_js(app.Handler.key_check).encode(), page)
+        self.assertIn(b"[hidden]{display:none!important}", page)       # studio.css, written into the page
         self.assertNotIn(b"/* studio.css */", page)
         self.assertEqual(self.call("GET", "/", token=False, host=f"evil.example:{self.port}", raw=True)[0], 403)
         for path in ("/api/state", "/api/runs", f"/api/run?name={self.rn}"):
@@ -357,15 +364,13 @@ class AppServerTest(unittest.TestCase):
 
     def test_the_standalone_audition_page_uses_the_apps_marks(self):
         path = f"/r/{self.rn}/audition.html"
-        code, page = self.call("GET", path, token=False, raw=True)
+        code, page, r = request(self.port, "GET", path)
         self.assertEqual(code, 200)
-        self.assertIn(self.token.encode(), page)                         # served: marks go through the API
+        self.assertNotIn(self.token.encode(), page)                      # served: marks go through the API, with
+        self.assertIn(edit.key_js(app.Handler.key_check).encode(), page)   # the key the Studio's tab keeps
         self.assertIn(f'RUN = "{self.rn}"'.encode(), page)
         self.assertIn(b'fetch("/api/mark"', page)
-        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
-        c.request("GET", path, headers={"Host": f"127.0.0.1:{self.port}"})
-        self.assertIn("frame-ancestors 'self'", c.getresponse().getheader("Content-Security-Policy"))
-        c.close()
+        self.assertIn("frame-ancestors 'self'", r.getheader("Content-Security-Policy"))
         self.assertEqual(self.call("GET", "/r/nope/audition.html", token=False, raw=True)[0], 404)
         self.assertEqual(self.call("GET", path, token=False, host=f"evil.example:{self.port}", raw=True)[0], 403)
         self.assertIn(b"SERVED = true", page)
@@ -657,15 +662,12 @@ class AppServerTest(unittest.TestCase):
 
     def test_the_editor_works_inside_the_app(self):
         base = f"/m/{self.rn}/{self.mashup}/"
-        code, page = self.call("GET", base, token=False, raw=True)
+        code, page, r = request(self.port, "GET", base)
         self.assertEqual(code, 200)
-        self.assertIn(self.token.encode(), page)
+        self.assertNotIn(self.token.encode(), page)
+        self.assertIn(edit.key_js(app.Handler.key_check).encode(), page)   # the frame shares the tab's storage
         self.assertIn(b'api("api/arrangement")', page)                 # relative: works under any prefix
-        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
-        c.request("GET", base, headers={"Host": f"127.0.0.1:{self.port}"})
-        csp = c.getresponse().getheader("Content-Security-Policy")
-        c.close()
-        self.assertIn("frame-ancestors 'self'", csp)                   # the Editor tab may frame it, no other site
+        self.assertIn("frame-ancestors 'self'", r.getheader("Content-Security-Policy"))   # the Editor tab may frame it
         code, j = self.call("GET", base + "api/arrangement")
         self.assertEqual((code, j["folder"]), (200, self.mashup))
         lanes = j["arrangement"]["lanes"]
@@ -777,10 +779,8 @@ class SurpriseTest(unittest.TestCase):
 class RestartTest(unittest.TestCase):
     @staticmethod
     def post(port, token, path):
-        c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-        c.request("POST", path, body=b"{}", headers={"Host": f"127.0.0.1:{port}", "X-Token": token})
-        r = c.getresponse()
-        return r.status, json.loads(r.read())
+        code, out, _ = request(port, "POST", path, b"{}", {"X-Token": token}, timeout=10)
+        return code, json.loads(out)
 
     def test_restart_waits_for_jobs_then_stops_the_server(self):
         srv = app.make_server(root=fx.tmpdir("mf-rs-"), ssd=fx.tmpdir("mf-rs-ssd-"))
@@ -805,7 +805,8 @@ class RestartTest(unittest.TestCase):
             if srv.app._free("/some/mashup"):
                 break
             time.sleep(0.02)
-        self.assertEqual(self.post(port, srv.token, "/api/restart")[0], 200)
+        code, j = self.post(port, srv.token, "/api/restart")
+        self.assertEqual((code, j["key"]), (200, srv.next_token))      # the page reconnects with it (minted once)
         t.join(10)
         self.assertFalse(t.is_alive())
         self.assertTrue(srv.restart)
@@ -833,30 +834,34 @@ class RestartTest(unittest.TestCase):
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
-        code = "import sys; sys.path.insert(0, %r); from mashup_finder import app; app.serve(%d, open_browser=False, root=%r, ssd=%r)" % (ROOT, port, root, root)
+        code = ("import sys, webbrowser; sys.path.insert(0, %r); from mashup_finder import app; "
+                "webbrowser.open = lambda url: print('browser', url, flush=True); app.serve(%d, root=%r, ssd=%r)") % (ROOT, port, root, root)
         p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         self.addCleanup(p.stdout.close)
         self.addCleanup(p.kill)
+        first = next(line for line in p.stdout if line.startswith("browser ")).split("#key=")[1].strip()
 
-        def token(old=None):                                            # the page's token, once a new one is served
-            for _ in range(300):
-                try:
-                    c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-                    c.request("GET", "/", headers={"Host": f"127.0.0.1:{port}"})
-                    t = re.search(r'const TOKEN = "([^"]+)"', c.getresponse().read().decode()).group(1)
-                    if t != old:
-                        return t
-                except OSError:
-                    pass
-                time.sleep(0.1)
-            self.fail("no Studio answered")
-        first = token()
-        self.assertEqual(self.post(port, first, "/api/restart")[0], 200)
-        second = token(first)
+        code, out, r = request(port, "POST", "/api/restart", b"{}", {"X-Token": first}, timeout=10)
+        second = json.loads(out)["key"]                                 # the open page reconnects with it
+        self.assertEqual(code, 200)
+        self.assertNotEqual(second, first)
+        for _ in range(300):
+            try:
+                if request(port, "GET", "/api/state", headers={"X-Token": second}, timeout=5)[0] == 200:
+                    break
+            except OSError:
+                pass
+            time.sleep(0.1)
+        else:
+            self.fail("the restarted Studio never answered to the next key")
+        self.assertNotIn(second.encode(), request(port, "GET", "/")[1])
         self.assertIsNone(p.poll())                                     # the same process, started again
         self.assertEqual(self.post(port, second, "/api/quit")[0], 200)
         self.assertEqual(p.wait(15), 0)
-        self.assertIn("Restarting Mashup Studio", p.stdout.read())
+        out = p.stdout.read()
+        self.assertIn("Restarting Mashup Studio", out)
+        self.assertNotIn("browser ", out)                               # no second tab: the open page reconnects
+        self.assertNotIn(second, out)
 
 
 class OneStudioTest(unittest.TestCase):
@@ -865,13 +870,69 @@ class OneStudioTest(unittest.TestCase):
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         port, logs = srv.server_address[1], []
         try:
-            with mock.patch.object(app.webbrowser, "open") as browser:
+            opened = threading.Event()
+            with mock.patch.object(app.webbrowser, "open", side_effect=lambda url: opened.set()) as browser:
                 app.serve(port, log=logs.append, root=fx.tmpdir("mf-one-"), ssd=fx.tmpdir("mf-one-ssd-"))
-            browser.assert_called_once_with(f"http://127.0.0.1:{port}/")
+                self.assertTrue(opened.wait(5))
+            browser.assert_called_once_with(f"http://127.0.0.1:{port}/#key={srv.token}")   # by the running Studio
             self.assertEqual(logs, [f"Mashup Studio is already running: http://127.0.0.1:{port}/"])
         finally:
             srv.shutdown()
             srv.server_close()
+
+    def test_a_studio_that_will_not_open_its_page_is_not_opened_for_it(self):
+        class Refuses(http.server.BaseHTTPRequestHandler):           # says it is a Studio (or holds its port), refuses
+            server_version, sys_version = "mf-app", "Python/3.12"
+
+            def do_HEAD(self):
+                self.send_response(200)
+                self.end_headers()
+
+            def do_POST(self):
+                self.send_response(403)
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+        srv = http.server.HTTPServer(("127.0.0.1", 0), Refuses)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        logs = []
+        with mock.patch.object(app.webbrowser, "open") as browser:
+            app.serve(srv.server_address[1], log=logs.append, root=fx.tmpdir("mf-one-"), ssd=fx.tmpdir("mf-one-ssd-"))
+        browser.assert_not_called()                                     # its page could be anyone's
+        self.assertIn("did not open its page", logs[-1])
+        self.assertIn(f"lsof -nP -iTCP:{srv.server_address[1]}", logs[-1])  # how to see whose it is, not its address
+
+    def test_only_a_second_start_can_ask_the_studio_to_open_its_page(self):
+        srv = app.make_server(root=fx.tmpdir("mf-one-"), ssd=fx.tmpdir("mf-one-ssd-"))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        port = srv.server_address[1]
+
+        ask = lambda method, headers: request(port, method, "/api/open-page", headers=headers, timeout=10)[:2]
+        calls, release = [], threading.Event()
+
+        def slow(url):                                                  # a browser that takes its time to open
+            calls.append(url)
+            release.wait(10)
+        with mock.patch.object(app.webbrowser, "open", side_effect=slow):
+            self.assertEqual(ask("POST", {})[0], 403)                   # a form on another site cannot set the header
+            self.assertEqual(ask("OPTIONS", {"Origin": "http://evil.example"})[0], 501)   # nor ask for it: no CORS
+            self.assertEqual(ask("POST", {"X-Open-Page": "1", "Host": f"evil.example:{port}"})[0], 403)
+            self.assertEqual(calls, [])
+            code, body = ask("POST", {"X-Open-Page": "1"})              # answered while the browser still opens
+            self.assertEqual(ask("POST", {"X-Open-Page": "1"})[0], 200)  # a repeat within 2 s opens nothing more
+            release.set()
+            for _ in range(50):
+                if calls:
+                    break
+                time.sleep(0.1)
+        self.assertEqual(code, 200)
+        self.assertNotIn(srv.token.encode(), body)                      # the key goes to the browser only
+        self.assertEqual(calls, [f"http://127.0.0.1:{port}/#key={srv.token}"])
 
     def test_a_port_another_program_holds_is_refused(self):
         with socket.socket() as s:
@@ -887,6 +948,13 @@ class OneStudioTest(unittest.TestCase):
             with self.assertRaises(SystemExit) as e:
                 app.serve(s.getsockname()[1], open_browser=False, root=fx.tmpdir("mf-one-"), ssd=fx.tmpdir("mf-one-ssd-"))
         self.assertIn("--port", str(e.exception))
+
+    def test_the_server_header_names_the_mac_apps_build_when_it_started_the_studio(self):
+        header = "from mashup_finder import app; print(app.Handler.server_version + ' ' + app.Handler.sys_version)"
+        env = {k: v for k, v in os.environ.items() if k != "MASHUP_STUDIO_BUILD"}
+        run = lambda env: subprocess.run(PY + [header], cwd=ROOT, env=env, capture_output=True, text=True).stdout.strip()
+        self.assertRegex(run(env), r"^mf-app Python/3")                              # mf app, a source install
+        self.assertEqual(run({**env, "MASHUP_STUDIO_BUILD": "app/1.0.0 ab12"}), "mf-app app/1.0.0 ab12")
 
 
 class CliTest(unittest.TestCase):

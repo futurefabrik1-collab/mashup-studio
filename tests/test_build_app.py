@@ -44,14 +44,15 @@ class BuildAppTest(unittest.TestCase):
         cls.ok = cls.build(cls, "ok", cls.rows)                       # one real build, shared by the layout tests
         cls.app = os.path.join(cls.tmp, "ok", "dist", "Mashup Studio.app")
 
-    def build(self, name, rows, *args):
+    def build(self, name, rows, *args, script=BUILD):
         d = os.path.join(self.tmp, name)
         os.makedirs(d, exist_ok=True)
         manifest = os.path.join(d, "third-party.txt")
         with open(manifest, "w") as f:
             f.write("# test manifest\n" + "".join(f"{dest}  {s}  {u}  {m}\n" for dest, s, u, m in rows))
-        env = {**os.environ, "MANIFEST": manifest, "BUILD_CACHE": os.path.join(d, "cache"), "DIST": os.path.join(d, "dist")}
-        return subprocess.run([BUILD, *args], env=env, capture_output=True, text=True, timeout=600)
+        env = {**os.environ, "MANIFEST": manifest, "BUILD_CACHE": os.path.join(d, "cache"), "DIST": os.path.join(d, "dist"),
+               "SIGN_IDENTITY": "-"}                                  # ad hoc: no test can sign with a real identity
+        return subprocess.run([script, *args], env=env, capture_output=True, text=True, timeout=600)
 
     def test_the_app_holds_the_public_code_the_programs_their_licences_and_its_version(self):
         self.assertEqual(self.ok.returncode, 0, self.ok.stderr)
@@ -107,6 +108,26 @@ class BuildAppTest(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("leaves the app folder", r.stderr)
         self.assertEqual(self.build("usage", self.rows, "--publish").returncode, 2)
+
+    def test_a_dependency_the_lock_does_not_pin_exactly_is_refused(self):
+        repo = os.path.join(self.tmp, "deps")                 # the script, the lock and a pyproject with one more dependency
+        os.makedirs(os.path.join(repo, "packaging"))
+        for f in ("packaging/build-app.sh", "packaging/requirements.lock"):
+            shutil.copy(os.path.join(ROOT, f), os.path.join(repo, f))
+        with open(os.path.join(ROOT, "pyproject.toml")) as f:
+            text = f.read()
+        for dep, why in (('"matplotlib>=3.9",', 'is not a plain "name==version" pin'),
+                         ('"pyloudnorm==0.1.1",  # loudness', "does not pin pyloudnorm==0.1.1")):
+            with open(os.path.join(repo, "pyproject.toml"), "w") as f:
+                f.write(text.replace("dependencies = [\n", f"dependencies = [\n    {dep}\n"))
+            r = self.build("deps-run", self.rows, "--no-dmg", script=os.path.join(repo, "packaging", "build-app.sh"))
+            self.assertEqual(r.returncode, 1, dep)
+            self.assertIn(why, r.stderr)
+
+    def test_a_signed_build_never_rewrites_the_lock(self):
+        r = self.build("sign-lock", self.rows, "--sign", "--lock")          # refused before anything runs
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("--lock rewrites packaging/requirements.lock", r.stderr)
 
 
 if __name__ == "__main__":

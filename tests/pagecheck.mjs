@@ -1,9 +1,10 @@
 // The pages themselves, in a real browser: node tests/pagecheck.mjs
 //
 // Starts a fixture Studio (tests/fixture_app.py: fake audio work, a small catalog, everything in a temp folder) and
-// drives headless Google Chrome over the DevTools protocol, with real mouse and key events: the Studio loads and
-// navigates, a brief slider rewrites the brief and the live count follows, Audition's Radio and keys work, and in
-// the editor a split cuts a block with a crossfade and a fade handle drags. No npm packages: Node 22+ and Chrome.
+// drives headless Google Chrome over the DevTools protocol, with real mouse and key events: without its key the page
+// says so and a junk key cannot replace it, the Studio loads and navigates, a brief slider rewrites the brief and the
+// live count follows, Audition's Radio and keys work, and in the editor a split cuts a block with a crossfade and a
+// fade handle drags. No npm packages: Node 22+ and Chrome.
 // Prints one line per check and exits 1 if any fails (or the page logs an error).
 //   MF_PYTHON  the Python with the app's packages (default: the venv packaging/install.sh made; nothing is installed)
 //   CHROME     the Chrome binary (default /Applications/Google Chrome.app/Contents/MacOS/Google Chrome)
@@ -101,9 +102,26 @@ async function check(name, fn) {
 }
 
 // ---------- the checks ----------
-await S('Page.navigate', { url });
+await check('a plain address, no key yet: the page says how to get in and does not reload', async () => {
+  await S('Page.navigate', { url: new URL('/', url).href });              // a fresh profile: nothing stored
+  if (!(await until('typeof TOKEN === "string" && !document.getElementById("err").hidden'))) return 'no error shown';
+  if ((await js('TOKEN')) !== '') return 'a key from nowhere';
+  if (!(await js('document.getElementById("err").textContent')).includes('open Mashup Studio again')) return 'no way in shown';
+  await js('window.__mark = 1'); await sleep(2000);
+  if ((await js('window.__mark')) !== 1) return 'the page reloaded';
+});
+await S('Page.navigate', { url });                                        // the address the Studio opens: #key=
 await check('the Studio loads', async () => {
   if (!(await until('document.title.includes("Mashup Studio") && typeof S === "object" && S.state'))) return 'no state from the server';
+  if (await js('location.hash.includes("key=")')) return 'the key stays in the address';
+});
+await check('a junk key in an address does not replace the stored one: the page comes back on it', async () => {
+  const good = await js('TOKEN');
+  await until(`localStorage.getItem("mf-key") === ${JSON.stringify(good)}`, 5000);   // kept once the server took it
+  await S('Page.navigate', { url: new URL(`/#key=${'x'.repeat(32)}`, url).href });   // pasted into the open tab
+  if (!(await until(`typeof TOKEN === "string" && TOKEN === ${JSON.stringify(good)} && typeof S === "object" && S.state`)))
+    return 'the page did not come back on the stored key';
+  if ((await js('localStorage.getItem("mf-key")')) !== good) return 'the junk key was stored';
 });
 await check('the tabs navigate', async () => {
   for (const view of ['briefs', 'runs', 'audition', 'mashups', 'editor', 'runs']) {
@@ -111,8 +129,25 @@ await check('the tabs navigate', async () => {
     if (!(await until(`!document.getElementById("v-${view}").hidden && S.view === "${view}"`, 3000))) return `${view} did not open`;
   }
 });
+await check('job ids and exit codes from the server are never read as HTML', async () => {
+  const bad = '1"><img src=x onerror="window.__pwned=1">';               // what another program on the port could send
+  await js(`(async () => {
+    const real = window.fetch, bad = ${JSON.stringify(bad)}, job = {id: bad, state: "running", title: "t", lines: [], rc: bad};
+    window.fetch = async (u, o) => {
+      if (String(u).startsWith("/api/state")) { const j = await (await real(u, o)).json(); j.jobs = [job]; return new Response(JSON.stringify(j)); }
+      if (String(u).startsWith("/api/jobs")) return new Response(JSON.stringify([{...job, state: "failed"}]));
+      return real(u, o);
+    };
+    try { await poll(); await drawLog(); } finally { window.fetch = real; }
+  })()`);
+  await sleep(300);
+  const [pwned, made] = await js('[window.__pwned === 1, !!document.querySelector("#job img, #log img")]');
+  await js('poll()');                                                     // back to the Studio's own jobs
+  if (pwned || made) return 'a job id was read as HTML';
+});
 await check('a brief slider rewrites the brief and the live count follows', async () => {
   await click('nav button[data-view="briefs"]');
+  if (!(await until(`document.querySelector('#brief-list button[data-brief="demo"]')`))) return 'no demo brief in the list';   // drawn after the view shows
   await click('#brief-list button[data-brief="demo"]');
   if (!(await until('/→/.test(document.getElementById("k-count").textContent)'))) return 'no count line';
   const before = await js('[document.getElementById("brief-text").value, document.getElementById("k-count").textContent]');
@@ -136,7 +171,7 @@ await check('Audition: Radio plays, K keeps and moves on, the arrow goes back, S
   if (!(await until('!!document.querySelector("#good .card.cur canvas") && document.querySelector("#good .card.cur canvas").width > 0', 5000))) return 'no waveform';
 });
 await check('the editor: a split cuts a block with a crossfade, a fade handle drags', async () => {
-  await S('Page.navigate', { url: `${url}m/${encodeURIComponent(run)}/${encodeURIComponent(mashup)}/` });
+  await S('Page.navigate', { url: `${new URL('/', url)}m/${encodeURIComponent(run)}/${encodeURIComponent(mashup)}/` });
   if (!(await until('window.mf && mf.arr && document.querySelectorAll(".blk").length > 0', 20000))) return 'the editor did not load';
   const n = await js('mf.arr.lanes.drums.length');
   await key('s');                                                  // the split tool, then a click inside a drums block
@@ -152,6 +187,30 @@ await check('the editor: a split cuts a block with a crossfade, a fade handle dr
   const cut = await js(`(() => { const b = mf.arr.lanes.bass[${blk}]; mf.edit(() => { b.fade_out = b.bars; }); mf.splitAt(b, b.out_bar + b.bars - 1);
     const r = mf.sel; return [r.bars, r.fade_out]; })()`);                   // a split never leaves a fade-out longer than its block
   if (!(cut[1] <= cut[0])) return `the right half's fade_out ${cut[1]} outlasts its ${cut[0]} bars`;
+});
+
+await check('arrangement fields from the server are never read as HTML in the editor', async () => {
+  const bad = '1"><img src=x onerror="window.__pwned=1">';               // what another program on the port could send
+  const { identifier } = await S('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+    const real = window.fetch, bad = ${JSON.stringify(bad)};
+    window.fetch = async (u, o) => {
+      const r = await real(u, o);
+      if (!String(u).endsWith("api/arrangement")) return r;
+      const j = await r.json(), a = j.arrangement;
+      a.sections = [{name: "s", out_bar: bad, bars: bad}];
+      j.lanes = [...j.lanes, bad]; a.lanes[bad] = [];
+      a.lanes[j.lanes[0]][0].src = bad;
+      return new Response(JSON.stringify(j));
+    };
+  })()` });
+  try {
+    await S('Page.navigate', { url: `${new URL('/', url)}m/${encodeURIComponent(run)}/${encodeURIComponent(mashup)}/` });
+    if (!(await until('window.mf && mf.arr && document.querySelectorAll(".blk").length > 0', 20000))) return 'the editor did not load';
+    await js('sel = arr.lanes[LANES[0]][0]; inspect()');                // the inspector shows the selected block
+    await sleep(300);
+    const [pwned, made] = await js('[window.__pwned === 1, !!document.querySelector("#secs img, #lanes img, #heads img, #insp img")]');
+    if (pwned || made) return 'an arrangement field was read as HTML';
+  } finally { await S('Page.removeScriptToEvaluateOnNewDocument', { identifier }); }
 });
 
 console.log(failed ? `${failed} check(s) failed` : 'all page checks passed');

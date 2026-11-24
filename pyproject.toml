@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mashup-studio"
-version = "1.0.0"
+version = "1.0.1"
 description = "Find vocal and instrumental pairs in your own music library and arrange full-length mashups, in a local web page."
 readme = "README.md"
 license = "MIT"

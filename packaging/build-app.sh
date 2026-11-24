@@ -35,6 +35,7 @@ for a in "$@"; do
   esac
 done
 die() { echo "build-app: $*" >&2; exit 1; }
+[ $sign = 0 ] || [ $relock = 0 ] || die "--lock rewrites packaging/requirements.lock: run it alone, commit the lock, then sign"
 [ $sign = 0 ] || [ -n "$identity" ] || die "--sign needs SIGN_IDENTITY (\"Developer ID Application: Your Name (TEAMID)\")"
 [ $notarize = 0 ] || [ -n "$profile" ] || die "--notarize needs NOTARY_PROFILE (a notarytool keychain profile)"
 version=$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' "$here/pyproject.toml")
@@ -91,19 +92,27 @@ done < "$manifest"
 
 # ---------- The Python packages the app installs: every one pinned with its hashes, in step with pyproject.toml ----------
 lockfile="$here/packaging/requirements.lock"
-if [ $relock = 1 ]; then
-  MACOSX_DEPLOYMENT_TARGET=14.0 "$res/bin/uv" pip compile "$here/pyproject.toml" --generate-hashes --python-version 3.12 \
-    --python-platform aarch64-apple-darwin --custom-compile-command "packaging/build-app.sh --lock" -o "$lockfile"
+if [ $relock = 1 ]; then                    # wheels only, as setup installs them, and no uv.toml of the developer's
+  MACOSX_DEPLOYMENT_TARGET=14.0 "$res/bin/uv" pip compile "$here/pyproject.toml" --no-config --only-binary :all: \
+    --generate-hashes --python-version 3.12 --python-platform aarch64-apple-darwin \
+    --custom-compile-command "packaging/build-app.sh --lock" -o "$lockfile"
 fi
-for pin in $(sed -n 's/^ *"\([A-Za-z0-9_.-]*==[0-9][^"]*\)",*$/\1/p' "$here/pyproject.toml"); do
-  name=$(printf '%s' "${pin%%==*}" | tr '[:upper:]' '[:lower:]' | sed 's/[_.]/-/g')
-  grep -qixE "${name}==${pin#*==} \\\\" "$lockfile" || die "packaging/requirements.lock does not pin $pin: run packaging/build-app.sh --lock"
-done
+# Every dependency must be a plain "name==version" pin, and the lock must hold exactly that pin.
+pins=0
+while read -r dep; do
+  [[ $dep =~ ^\"([A-Za-z0-9_.-]+)==([0-9][A-Za-z0-9.+!-]*)\",?$ ]] ||
+    die "pyproject.toml: $dep is not a plain \"name==version\" pin; the app installs packaging/requirements.lock, so pin every dependency, then run packaging/build-app.sh --lock"
+  name=$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]' | sed 's/[_.]/-/g')
+  grep -qixF -- "$name==${BASH_REMATCH[2]} \\" "$lockfile" ||
+    die "packaging/requirements.lock does not pin $name==${BASH_REMATCH[2]}: after changing the dependencies, run packaging/build-app.sh --lock"
+  pins=$((pins + 1))
+done < <(sed -n '/^dependencies = \[/,/^\]/p' "$here/pyproject.toml" | sed '1d;$d;s/#.*//;s/[[:space:]]//g' | grep -v '^$')
+[ $pins -gt 0 ] || die "no dependencies found in pyproject.toml"
 
 # ---------- The Studio's code ----------
 mkdir "$work/tree"
 if [ -n "$tree_script" ]; then
-  "$tree_script" "$work/tree" >/dev/null
+  "$tree_script" "$work/tree"
 else
   git -C "$here" archive HEAD | tar -x -C "$work/tree"
 fi

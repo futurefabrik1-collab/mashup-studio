@@ -16,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))          # th
 # The data folder: runs/, briefs/ and the default cache. $MF_DATA when set (the Mac app sets it to SUPPORT, since nothing
 # may be written inside the signed app), else the program folder itself, as a clone install has always had it.
 DATA = os.path.expanduser(os.environ.get("MF_DATA") or ROOT)
+RUNS, BRIEFS = os.path.join(DATA, "runs"), os.path.join(DATA, "briefs")
 LISTS = ("music_folders", "extra_sources")
 
 
@@ -23,12 +24,11 @@ def seed_data():
     """A data folder of its own (the Mac app's) gets runs/ and, the first time, the program's example briefs."""
     if os.path.realpath(DATA) == os.path.realpath(ROOT):
         return
-    os.makedirs(os.path.join(DATA, "runs"), exist_ok=True)
-    briefs = os.path.join(DATA, "briefs")
-    if not os.path.isdir(briefs):
-        os.makedirs(briefs)
+    os.makedirs(RUNS, exist_ok=True)
+    if not os.path.isdir(BRIEFS):
+        os.makedirs(BRIEFS)
         for f in glob.glob(os.path.join(ROOT, "briefs", "*.toml")):
-            shutil.copy(f, briefs)
+            shutil.copy(f, BRIEFS)
 
 
 def path():

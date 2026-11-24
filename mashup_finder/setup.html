@@ -108,10 +108,11 @@ $("scan").onclick = () => api("/api/scan", {}).then((r) => { scanJob = r.job; re
   .catch((e) => say("scan-msg", e.message, "err"));
 
 $("open").onclick = async () => {                               // a Restart: the new server reads the settings
-  try { await api("/api/restart", {}); } catch (e) { return showErr(e); }
+  let key; try { key = (await api("/api/restart", {})).key; } catch (e) { return showErr(e); }
+  mfKey.set(key);                                                // the Studio page reads it (edit.KEY_JS)
   $("restarting").hidden = false;
-  const t0 = Date.now(), again = async () => {                   // the new server writes a new token into the page
-    try { const r = await fetch("/", {cache: "no-store"}); if (r.ok && !(await r.text()).includes(TOKEN)) return location.assign("/"); } catch (e) {}
+  const t0 = Date.now(), again = async () => {                   // the new server answers to the next key
+    try { if ((await fetch("/api/state", {headers: {"X-Token": key}, cache: "no-store"})).ok) return location.assign("/"); } catch (e) {}
     if (Date.now() - t0 > 60000) { $("restarting").textContent = "Mashup Studio did not come back: start it again from its icon."; return; }
     setTimeout(again, 500);
   };

@@ -64,7 +64,7 @@ To build the downloadable app and DMG yourself, run `packaging/build-app.sh`. It
 and writes to `dist/`. It downloads uv, ffmpeg and Rubber Band, and checks each against the sha256 in
 `packaging/third-party.txt`. `--sign` and `--notarize` need your own Developer ID, given in `SIGN_IDENTITY` and
 `NOTARY_PROFILE`. The app installs the Python packages listed in `packaging/requirements.lock`, each pinned with its
-hashes. After you change a version in `pyproject.toml`, run `packaging/build-app.sh --lock` to write that file again.
+hashes. After you change the dependencies in `pyproject.toml` (each one pinned with `==`), run `packaging/build-app.sh --lock` to write that file again.
 
 ## First start
 

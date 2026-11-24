@@ -13,8 +13,7 @@ import numpy as np
 
 from . import config
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUNS = os.path.join(config.DATA, "runs")
+RUNS = config.RUNS
 
 
 def ratings(runs=None):
@@ -337,10 +336,10 @@ def main(argv=None):
     ed = sub.add_parser("edit", help="block editor for a mashup folder (its arrangement.json), in the browser")
     ed.add_argument("folder", help="a mashup output folder (holds arrangement.json and blocks/)")
     ed.add_argument("--port", type=int, default=0, help="port on 127.0.0.1 (default: any free one)")
-    ed.add_argument("--no-browser", action="store_true", help="print the address instead of opening the browser")
+    ed.add_argument("--no-browser", action="store_true", help="print the page's address with its key instead of opening the browser")
     st = sub.add_parser("app", help="Mashup Studio: briefs, runs, audition, mashups and the editor in one page")
     st.add_argument("--port", type=int, default=8765, help="port on 127.0.0.1 (default 8765; a second start opens the running one)")
-    st.add_argument("--no-browser", action="store_true", help="print the address instead of opening the browser")
+    st.add_argument("--no-browser", action="store_true", help="print the page's address with its key instead of opening the browser")
     sc = sub.add_parser("scan", help="read music folders into the catalog: tags, else Beat This! tempo and a key estimate")
     sc.add_argument("folders", nargs="*", metavar="FOLDER", help="default: the settings' music_folders")
     sc.add_argument("--catalog", help="the CSV to write (default: the settings' catalog)")
